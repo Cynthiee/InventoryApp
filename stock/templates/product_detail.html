@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto">
+    <!-- Title -->
+    <h1 class="text-2xl font-bold mb-6 text-center">{{ title }}</h1>
+
+    <!-- Product Details -->
+    <div class="space-y-4">
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Name:</strong></p>
+            <p class="text-gray-900">{{ product.name }}</p>
+        </div>
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Category:</strong></p>
+            <p class="text-gray-900">{{ product.category.name }}</p>
+        </div>
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Regular Price:</strong></p>
+            <p class="text-gray-900">&#8358; {{ product.regular_price }}</p>
+        </div>
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Bulk Price:</strong></p>
+            <p class="text-gray-900">&#8358; {{ product.bulk_price }}</p>
+        </div>
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Minimum Bulk Quantity:</strong></p>
+            <p class="text-gray-900">{{ product.minimum_bulk_quantity }}</p>
+        </div>
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Quantity:</strong></p>
+            <p class="text-gray-900">{{ product.quantity }}</p>
+        </div>
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Date Added:</strong></p>
+            <p class="text-gray-900">{{ product.created }}</p>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="mt-6 flex justify-center space-x-4">
+        <a href="{% url 'product_edit' product.slug %}" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+            Edit Product
+        </a>
+        <button onclick="openDeleteModal()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
+            Delete Product
+        </button>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3 text-center">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Delete Product</h3>
+            <div class="mt-2 px-7 py-3">
+                <p class="text-sm text-gray-500">Are you sure you want to delete the product <strong>{{ product.name }}</strong>?</p>
+            </div>
+            <div class="items-center px-4 py-3">
+                <form id="deleteForm" method="post" action="{% url 'product_delete' product.slug %}">
+                    {% csrf_token %}
+                    <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
+                        Yes, Delete
+                    </button>
+                    <button type="button" onclick="closeDeleteModal()" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 ml-2">
+                        Cancel
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript to Handle Modal -->
+<script>
+    function openDeleteModal() {
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').classList.add('hidden');
+    }
+
+    // Handle form submission
+    document.getElementById('deleteForm').addEventListener('submit', function(event) {
+        event.preventDefault(); // Prevent default form submission
+        fetch(this.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams(new FormData(this)),
+        })
+        .then(response => {
+            if (response.redirected) {
+                window.location.href = response.url; // Redirect to the product list
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    });
+</script>
+{% endblock %}

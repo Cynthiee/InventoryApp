@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% load static tailwind_tags %}
+{% block content %}
+<div id="product" class="flex w-50 flex-col mt-5 px-8 bg-slate-200 min-h-screen">
+  {% if restock_needed %}
+  <div class="mb-4">
+    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded" role="alert">
+        <p class="font-bold">Products Needing Restock:</p>
+        <ul class="mt-2">
+            {% for product in restock_needed %}
+            <li>
+                {{ product.name }} - Current quantity: {{ product.quantity }} 
+                (Restock level: {{ product.restock_level }})
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+    <div class="mb-8"> 
+        <h1 class="text-center font-bold text-3xl text-gray-800 mb-6">{{title}}</h1>
+        <form method="GET" class="bg-white rounded-lg shadow-md p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-group">
+                    {{ form.category|as_crispy_field }}
+                </div>
+                <div class="form-group">
+                    {{ form.search_term|as_crispy_field }}
+                </div>
+            </div>
+            <div class="mt-4 text-center">
+                <button type="submit" class="btn bg-blue-950 text-zinc-400 hover:bg-blue-900 sm:btn-sm md:btn-md lg:btn-lg">
+                    Search
+                </button>
+                <a href="{% url 'product_create' %}" class="btn bg-green-700 text-zinc-400 hover:bg-green-600 sm:btn-sm md:btn-md lg:btn-lg ml-2">
+                    Add New Product
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="overflow-x-auto bg-white rounded-lg shadow-md">
+        <table class="table table-zebra w-50">
+            <thead class="bg-gray-100">
+                <tr class="text-xl">
+                    <th class="px-4 py-3">S/N</th>
+                    <th class="px-4 py-3">Category</th>
+                    <th class="px-4 py-3">Name</th>
+                    <th class="px-4 py-3">Quantity</th>
+                    <th class="px-4 py-3">Restock Level</th>
+                    <th class="px-4 py-3">Regular Price</th>
+                    <th class="px-4 py-3">Bulk Price</th>
+                    <th class="px-4 py-3">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+              {% for product in products %}
+              <tr class="hover:bg-gray-50 {% if product.needs_restock %}bg-yellow-50{% endif %}">
+                  <td class="px-4 py-3">{{ forloop.counter }}</td>
+                  <td class="px-4 py-3">{{ product.category.name }}</td>
+                  <td class="px-4 py-3"><a href="{% url 'product_detail' product.slug %}" class="text-blue-600 hover:text-blue-800">
+                    {{ product.name }}
+                </a></td>
+                  <td class="px-4 py-3">
+                      {{ product.quantity }}
+                      {% if product.needs_restock %}
+                      <span class="text-yellow-600">⚠️</span>
+                      {% endif %}
+                  </td>
+                  <td class="px-4 py-3">{{ product.restock_level }}</td>
+                  <td class="px-4 py-3"><span>&#8358;</span>{{ product.regular_price }}</td>
+                  <td class="px-4 py-3"><span>&#8358;</span>{{ product.bulk_price }}</td>
+                  <td class="px-4 py-3">
+                      {% if product.needs_restock %}
+                      <span class="px-2 py-1 text-xs font-semibold text-yellow-600 bg-yellow-100 rounded-full">
+                          Restock Needed
+                      </span>
+                      {% else %}
+                      <span class="px-2 py-1 text-xs font-semibold text-green-600 bg-green-100 rounded-full">
+                          In Stock
+                      </span>
+                      {% endif %}
+                  </td>
+              </tr>
+              {% empty %}
+              <tr>
+                  <td colspan="9" class="px-4 py-3 text-center text-gray-600">
+                      No products found.
+                  </td>
+              </tr>
+              {% endfor %}
+          </tbody>
+      </table>
+  </div>
+</div>
+{% endblock content %}

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow-lg">
+    <h1 class="text-2xl font-bold mb-6">{{ title }}</h1>
+    <a href="{% url 'product_create' %}" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+        Add Product
+    </a>
+    <div class="mt-6 overflow-x-auto">
+        <table class="min-w-full bg-white">
+            <thead>
+                <tr>
+                    <th class="py-3 px-4 border-b text-left">Name</th>
+                    <th class="py-3 px-4 border-b text-left">Regular Price</th>
+                    <th class="py-3 px-4 border-b text-left">Bulk Price</th>
+                    <th class="py-3 px-4 border-b text-left">Quantity</th>
+                    <th class="py-3 px-4 border-b text-left">Stock Level</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr class="hover:bg-gray-50 transition duration-200">
+                    <td class="py-3 px-4 border-b">
+                        <a href="{% url 'product_detail' product.slug %}" class="text-blue-500 hover:text-blue-700">
+                            {{ product.name }}
+                        </a>
+                    </td>
+                    <td class="py-3 px-4 border-b">&#8358; {{ product.regular_price }}</td>
+                    <td class="py-3 px-4 border-b">&#8358; {{ product.bulk_price }}</td>
+                    <td class="py-3 px-4 border-b">{{ product.quantity }}</td>
+                    <td class="py-3 px-4 border-b">
+                        {% if product.quantity <= product.restock_level %}
+                            <span class="text-red-500">Low Stock</span>
+                        {% else %}
+                            <span class="text-green-500">In Stock</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="py-3 px-4 border-b text-center text-gray-500">No products found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
