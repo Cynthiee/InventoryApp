@@ -63,11 +63,21 @@ def product_create(request):
     form = ProductCreateForm(request.POST or None, request=request)
     
     if form.is_valid():
-        product = form.save()
-        if Product.objects.filter(name=product.name, category=product.category).count() > 1:
+        product = form.save(commit=False)  # Don't save yet
+        category = form.cleaned_data['category']
+        print(f"Category: {category}")  # Debug statement
+        product.category = category
+        product.save()
+        print(f"Product saved with category: {product.category}")  # Debug statement
+
+        # Check for duplicate products
+        duplicate_count = Product.objects.filter(name=product.name, category=product.category).count()
+        print(f"Duplicate count: {duplicate_count}")  # Debug statement
+        if duplicate_count > 1:
             messages.success(request, f'Product "{product.name}" already exists. Quantity updated!')
         else:
             messages.success(request, f'Product "{product.name}" added successfully!')
+        
         return redirect('product_list')
     
     return render(request, 'product_form.html', {

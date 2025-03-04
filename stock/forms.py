@@ -245,7 +245,7 @@ class SearchProductCategory(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
-            'placeholder': 'Search by product name o'
+            'placeholder': 'Search by product name'
         })
     )
     available_only = forms.BooleanField(
