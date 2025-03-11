@@ -1,29 +1,20 @@
 from django import forms
-from .models import Category, Product, RegularSale, BulkSale
+from django.forms import inlineformset_factory
+from .models import Category, Product, Sale, SaleItem, InventoryStatement, InventoryStatementItem
 from django.utils.text import slugify
+from django.utils import timezone
 
 class CategoryForm(forms.ModelForm):
     class Meta:
         model = Category
         fields = ['name']
-    
+
     def clean_name(self):
-        name = self.cleaned_data.get('name')
-        if not name:
-            raise forms.ValidationError('This field is required.')
-        
-        # Convert name to lowercase for case-insensitive comparison
-        name_lower = name.lower()
-        
-        # Exclude current instance when editing
-        query = Category.objects.filter(name__iexact=name_lower)
-        if self.instance.pk:
-            query = query.exclude(pk=self.instance.pk)
-            
-        if query.exists():
+        name = self.cleaned_data.get('name').strip()
+        if Category.objects.exclude(pk=self.instance.pk).filter(name__iexact=name).exists():
             raise forms.ValidationError(f'Category "{name}" already exists.')
         return name
-    
+
     def save(self, commit=True):
         instance = super().save(commit=False)
         instance.slug = slugify(instance.name)
@@ -31,144 +22,81 @@ class CategoryForm(forms.ModelForm):
             instance.save()
         return instance
 
-class ProductCreateForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        self.request = kwargs.pop('request', None)
-        super().__init__(*args, **kwargs)
 
-    category = forms.ModelChoiceField(
-        queryset=Category.objects.all(),
-        required=False,
-        widget=forms.Select(attrs={
-            'class': 'form-control',
-            'placeholder': 'Select existing category'
-        })
-    )
-    
-    new_category = forms.CharField(
-        max_length=200, 
-        required=False,
-        widget=forms.TextInput(attrs={
-            'placeholder': 'Or create new category',
-            'class': 'form-control'
-        })
-    )
-    
+class ProductCreateForm(forms.ModelForm):
+    category = forms.ModelChoiceField(queryset=Category.objects.all(), required=False)
+    new_category = forms.CharField(max_length=200, required=False)
+
     class Meta:
         model = Product
-        fields = [
-            'category', 'name', 'regular_price', 
-            'bulk_price', 'quantity', 'minimum_bulk_quantity', 
-            'restock_level', 'available'
-        ]
-        widgets = {
-            'name': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Product name'
-            }),
-            'regular_price': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '1',
-                'step': '0.01'
-            }),
-            'bulk_price': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '1',
-                'step': '0.01'
-            }),
-            'quantity': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0'
-            }),
-            'restock_level': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'help_text': 'Minimum quantity before restock alert'
-            }),
-            'minimum_bulk_quantity': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '12',
-                'help_text': 'Minimum quantity required for bulk pricing'
-            }),
-            'available': forms.CheckboxInput(attrs={
-                'class': 'form-check-input'
-            })
-        }
-    
+        fields = ['category', 'name', 'regular_price', 'bulk_price', 'quantity', 'minimum_bulk_quantity', 'restock_level', 'available']
+
     def clean(self):
         cleaned_data = super().clean()
-        category = cleaned_data.get('category')
-        new_category = cleaned_data.get('new_category')
-        regular_price = cleaned_data.get('regular_price')
-        bulk_price = cleaned_data.get('bulk_price')
-        quantity = cleaned_data.get('quantity')
-        restock_level = cleaned_data.get('restock_level')
-        minimum_bulk_quantity = cleaned_data.get('minimum_bulk_quantity')
+        category, new_category = cleaned_data.get('category'), cleaned_data.get('new_category')
         
-        # Validate category
         if not category and not new_category:
-            raise forms.ValidationError('Please either select an existing category or create a new one.')
+            raise forms.ValidationError('Select an existing category or create a new one.')
         
-        if new_category:
-            existing_category = Category.objects.filter(name__iexact=new_category).first()
-            if existing_category:
-                cleaned_data['category'] = existing_category
-                cleaned_data['new_category'] = ''
-            else:
-                try:
-                    new_cat = Category.objects.create(
-                        name=new_category,
-                        slug=slugify(new_category)
-                    )
-                    cleaned_data['category'] = new_cat
-                    cleaned_data['new_category'] = ''
-                except Exception as e:
-                    raise forms.ValidationError(f'Error creating new category: {str(e)}')
-        
-        # Validate prices
-        if bulk_price and regular_price and bulk_price > regular_price:
+        if cleaned_data.get('bulk_price') > cleaned_data.get('regular_price'):
             raise forms.ValidationError('Bulk price cannot be greater than regular price.')
         
-        # Validate quantities
-        if quantity is not None and quantity < 0:
-            raise forms.ValidationError('Quantity cannot be negative.')
-            
-        if restock_level is not None and restock_level < 0:
-            raise forms.ValidationError('Restock level cannot be negative.')
-        
-        if minimum_bulk_quantity is not None and minimum_bulk_quantity < 12:
+        if cleaned_data.get('minimum_bulk_quantity', 12) < 12:
             raise forms.ValidationError('Minimum bulk quantity must be at least 12.')
-        
+
         return cleaned_data
-    
+
     def save(self, commit=True):
         instance = super().save(commit=False)
         instance.slug = slugify(instance.name)
         
-        # Check if a product with the same name and category already exists
-        existing_product = Product.objects.filter(name=instance.name, category=instance.category).first()
+        if new_category := self.cleaned_data.get('new_category'):
+            instance.category, _ = Category.objects.get_or_create(name=new_category, defaults={'slug': slugify(new_category)})
         
+        # Update existing product or create a new one
+        existing_product = Product.objects.filter(name=instance.name, category=instance.category).first()
         if existing_product:
-            # Update the existing product's quantity and other fields
             existing_product.quantity += instance.quantity
-            existing_product.regular_price = instance.regular_price
-            existing_product.bulk_price = instance.bulk_price
-            existing_product.minimum_bulk_quantity = instance.minimum_bulk_quantity
-            existing_product.restock_level = instance.restock_level
-            existing_product.available = instance.available
+            for field in ['regular_price', 'bulk_price', 'minimum_bulk_quantity', 'restock_level', 'available']:
+                setattr(existing_product, field, getattr(instance, field))
             if commit:
                 existing_product.save()
             return existing_product
-        else:
-            # Save the new product
-            if commit:
-                instance.save()
-            return instance
+        
+        if commit:
+            instance.save()
+        return instance
 
-class SaleBaseForm(forms.ModelForm):
+            
+class SaleForm(forms.ModelForm):
+    class Meta:
+        model = Sale
+        fields = ['user']
+        widgets = {
+            'user': forms.Select(attrs={'class': 'form-control'}),
+        }
+
+
+class SaleItemForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['product'].queryset = Product.objects.filter(available=True)
+        self.fields['product'].queryset = Product.objects.filter(quantity__gt=0)
+        self.fields['product'].widget.attrs.update({
+            'data-regular-price': lambda p: str(p.regular_price),
+            'data-bulk-price': lambda p: str(p.bulk_price),
+        })
+
+    class Meta:
+        model = SaleItem
+        fields = ['product', 'quantity', 'sale_type']
+        widgets = {
+            'product': forms.Select(attrs={'class': 'form-control'}),
+            'quantity': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '1'
+            }),
+            'sale_type': forms.Select(attrs={'class': 'form-control'}),
+        }
 
     def clean_quantity(self):
         quantity = self.cleaned_data.get('quantity')
@@ -177,62 +105,28 @@ class SaleBaseForm(forms.ModelForm):
         if product and quantity:
             if quantity > product.quantity:
                 raise forms.ValidationError("Not enough products in stock.")
-        return quantity
-
-class RegularSaleForm(SaleBaseForm):
-    class Meta:
-        model = RegularSale
-        fields = ['product', 'quantity']
-        widgets = {
-            'product': forms.Select(attrs={'class': 'form-control'}),
-            'quantity': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '1'
-            })
-        }
-
-    def save(self, commit=True):
-        instance = super().save(commit=False)
-        instance.price_per_unit = instance.product.regular_price
-        if commit:
-            instance.save()
-            # Update product quantity
-            instance.product.quantity -= instance.quantity
-            instance.product.save()
-        return instance
-
-class BulkSaleForm(SaleBaseForm):
-    class Meta:
-        model = BulkSale
-        fields = ['product', 'quantity']
-        widgets = {
-            'product': forms.Select(attrs={'class': 'form-control'}),
-            'quantity': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '12'
-            })
-        }
-
-    def clean_quantity(self):
-        quantity = super().clean_quantity()
-        product = self.cleaned_data.get('product')
-        
-        if product and quantity:
-            if quantity < product.minimum_bulk_quantity:
+            if self.cleaned_data.get('sale_type') == 'bulk' and quantity < product.minimum_bulk_quantity:
                 raise forms.ValidationError(
                     f"Minimum {product.minimum_bulk_quantity} items required for bulk purchase."
                 )
         return quantity
 
     def save(self, commit=True):
-        instance = super().save(commit=False)
-        instance.bulk_price_per_unit = instance.product.bulk_price
+        """
+        Override save method to update product stock.
+        """
+        sale_item = super().save(commit=False)
+        
+        # Reduce stock only when a new SaleItem is created
         if commit:
-            instance.save()
-            # Update product quantity
-            instance.product.quantity -= instance.quantity
-            instance.product.save()
-        return instance
+            sale_item.product.quantity -= sale_item.quantity
+            sale_item.product.save()
+            sale_item.save()
+        
+        return sale_item
+
+
+SaleItemFormSet = inlineformset_factory(Sale, SaleItem, form=SaleItemForm, extra=1, can_delete=True)
 
 class SearchProductCategory(forms.Form):
     category = forms.ModelChoiceField(
@@ -261,3 +155,41 @@ class SearchProductCategory(forms.Form):
             'class': 'form-check-input'
         })
     )
+
+
+class InventoryStatementForm(forms.ModelForm):
+    """Form for creating and updating inventory statements"""
+    
+    class Meta:
+        model = InventoryStatement
+        fields = ['company_name', 'prepared_by', 'notes']
+        widgets = {
+            'notes': forms.Textarea(attrs={'rows': 3}),
+        }
+        
+
+class InventoryStatementItemForm(forms.ModelForm):
+    """Form for updating inventory statement items"""
+    
+    class Meta:
+        model = InventoryStatementItem
+        fields = ['received_stock']
+        widgets = {
+            'received_stock': forms.NumberInput(attrs={'class': 'form-control', 'min': '0'})
+        }
+    
+    def clean_received_stock(self):
+        received_stock = self.cleaned_data.get('received_stock')
+        if received_stock < 0:
+            raise forms.ValidationError("Received stock cannot be negative")
+        return received_stock
+
+
+# Create a formset for updating received stock for multiple items at once
+InventoryStatementItemFormSet = inlineformset_factory(
+    InventoryStatement, 
+    InventoryStatementItem,
+    form=InventoryStatementItemForm,
+    extra=0,
+    can_delete=False
+)

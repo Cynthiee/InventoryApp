@@ -1,44 +1,84 @@
+import json
+from arrow import now
+from django.template.loader import render_to_string
 from django.shortcuts import render, redirect, get_object_or_404
-# from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.contrib import messages
+from django.core.serializers.json import DjangoJSONEncoder
+from xhtml2pdf import pisa
+from django.utils import timezone
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from .models import Category, Product, RegularSale, BulkSale, InventoryStatement
+from .models import Category, Product, Sale, SaleItem, InventoryStatement
 from .forms import (
-    CategoryForm, ProductCreateForm, SearchProductCategory, 
-    RegularSaleForm, BulkSaleForm
+    CategoryForm, InventoryStatementForm, InventoryStatementItemFormSet, ProductCreateForm, SaleItemFormSet, SearchProductCategory, 
+    SaleForm, SaleItemForm
 )
 import csv
-from datetime import date
+from datetime import date, timedelta
+import base64
 
 # Home View
 def home(request):
     today = date.today()
+
+    # Get counts and totals
+    low_stock_count = Product.objects.filter(needs_restock=True).count()
+    total_products = Product.objects.count()
+    today_sales_count = Sale.objects.filter(sale_date__date=today).count()
+    total_stock = Product.objects.aggregate(total=Sum('quantity'))['total'] or 0
+
+    # Calculate today's sales data
+    today_sales = Sale.objects.filter(sale_date__date=today)
+    total_income = today_sales.aggregate(total=Sum('total_amount'))['total'] or 0
+    total_products_sold = SaleItem.objects.filter(sale__sale_date__date=today).aggregate(total=Sum('quantity'))['total'] or 0
+
+    # Ensure only one statement per day
+    statement, created = InventoryStatement.objects.get_or_create(
+        date=today,  # Changed from generated_at to date
+        defaults={
+            'company_name': 'Your Company',  # Add appropriate default values
+            'prepared_by': 'System',
+            'notes': 'Automatically generated daily statement'
+        }
+    )
+
+    # There's also an issue with report_data - your model doesn't have this field
+    # Instead, you should create/update InventoryStatementItems if needed
+    
+    # Call your existing method to generate statement items
+    if created:
+        statement.generate_statement_items()
+
     context = {
         'title': 'Welcome to the Inventory Management System',
-        'total_products': Product.objects.count(),
-        'low_stock_count': Product.objects.filter(needs_restock=True).count(),
-        'today_sales': RegularSale.objects.filter(sale_date__date=today).count() + 
-                      BulkSale.objects.filter(sale_date__date=today).count(),
-        'statement': InventoryStatement.objects.filter(date=today).first()
+        'total_products': total_products,
+        'low_stock_count': low_stock_count,
+        'today_sales': today_sales_count,
+        'statement': statement
     }
+
     return render(request, 'home.html', context)
 
+
+
 # Category Views
-# @login_required
 def category_list(request):
     categories_list = Category.objects.all()
-    paginator = Paginator(categories_list, 10)  # Show 10 categories per page
-
+    
+    # Define page size as a constant
+    PAGE_SIZE = 10
+    
+    paginator = Paginator(categories_list, PAGE_SIZE)
     page = request.GET.get('page')
+    
     try:
         categories = paginator.page(page)
     except PageNotAnInteger:
-        # If page is not an integer, deliver the first page
         categories = paginator.page(1)
     except EmptyPage:
-        # If page is out of range, deliver the last page
         categories = paginator.page(paginator.num_pages)
 
     context = {
@@ -47,9 +87,11 @@ def category_list(request):
     }
     return render(request, 'categories.html', context)
 
+
 def product_list_by_category(request, category_id):
     category = get_object_or_404(Category, id=category_id)
-    products = Product.objects.filter(category=category)
+    # Use select_related to reduce database hits
+    products = Product.objects.filter(category=category).select_related('category')
     
     context = {
         'title': f'Products in {category.name}',
@@ -58,113 +100,140 @@ def product_list_by_category(request, category_id):
     }
     return render(request, 'product_list_by_category.html', context)
 
-# @login_required
+
 def product_create(request):
-    form = ProductCreateForm(request.POST or None, request=request)
+    form = ProductCreateForm(request.POST or None)
     
     if form.is_valid():
-        product = form.save(commit=False)  # Don't save yet
-        category = form.cleaned_data['category']
-        print(f"Category: {category}")  # Debug statement
-        product.category = category
-        product.save()
-        print(f"Product saved with category: {product.category}")  # Debug statement
+        with transaction.atomic():
+            product = form.save()
+            messages.success(request, f'Product "{product.name}" {"updated" if product.pk else "added"} successfully!')
+            return redirect('product_list')
 
-        # Check for duplicate products
-        duplicate_count = Product.objects.filter(name=product.name, category=product.category).count()
-        print(f"Duplicate count: {duplicate_count}")  # Debug statement
-        if duplicate_count > 1:
-            messages.success(request, f'Product "{product.name}" already exists. Quantity updated!')
-        else:
-            messages.success(request, f'Product "{product.name}" added successfully!')
-        
-        return redirect('product_list')
-    
-    return render(request, 'product_form.html', {
-        'title': 'Add Product',
-        'form': form
-    })
+    return render(request, 'product_form.html', {'title': 'Add Product', 'form': form})
 
-# @login_required
+
 def product_list(request):
-    queryset = Product.objects.all()
+    # Start with base queryset and apply filters as needed
+    queryset = Product.objects.all().select_related('category')
     form = SearchProductCategory(request.GET or None)
-    restock_needed = queryset.filter(needs_restock=True)
-
+    restock_needed = Product.objects.filter(needs_restock=True).count()
+    
     if form.is_valid():
         category = form.cleaned_data.get('category')
         search_term = form.cleaned_data.get('search_term')
         available_only = form.cleaned_data.get('available_only')
         needs_restock = form.cleaned_data.get('needs_restock')
         
+        # Build filters incrementally
+        filters = Q()
+        
         if category:
-            queryset = queryset.filter(category=category)
+            filters &= Q(category=category)
         
         if search_term:
-            queryset = queryset.filter(
-                Q(name__icontains=search_term) |
-                Q(category__name__icontains=search_term)
-            )
+            search_filters = Q(name__icontains=search_term) | Q(category__name__icontains=search_term)
+            filters &= search_filters
         
         if available_only:
-            queryset = queryset.filter(available=True)
+            filters &= Q(available=True)
             
         if needs_restock:
-            queryset = queryset.filter(needs_restock=True)
+            filters &= Q(needs_restock=True)
+            
+        # Apply all filters at once
+        if filters:
+            queryset = queryset.filter(filters)
     
-    context = {
-        'title': 'Products Inventory',
-        'form': form,
-        'products': queryset,
-        'restock_needed': restock_needed,
-    }
-    return render(request, 'product_list.html', context)
+    # Check if the request is for CSV export
+    is_csv_export = request.GET.get('export') == 'csv'
+    
+    if is_csv_export:
+        # Create a CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="products.csv"'
+        
+        # Create CSV writer
+        writer = csv.writer(response)
+        
+        # Write header row - matching the fields in your template
+        writer.writerow(['Name', 'Regular Price', 'Bulk Price', 'Quantity', 'Stock Level'])
+        
+        # Write data rows
+        for product in queryset:
+            # Determine stock level status text
+            stock_status = "Low Stock" if product.quantity <= product.restock_level else "In Stock"
+            
+            writer.writerow([
+                product.name,
+                product.regular_price,
+                product.bulk_price,
+                product.quantity,
+                stock_status
+            ])
+        
+        return response
+    else:
+        # Standard HTML response
+        context = {
+            'title': 'Products Inventory',
+            'form': form,
+            'products': queryset,
+            'restock_needed': restock_needed,
+        }
+        return render(request, 'product_list.html', context)
 
 
-# @login_required
 def product_detail(request, slug):
-    product = get_object_or_404(Product, slug=slug)
-    regular_sales = RegularSale.objects.filter(product=product)
-    bulk_sales = BulkSale.objects.filter(product=product)
+    # Use select_related to reduce queries
+    product = get_object_or_404(Product.objects.select_related('category'), slug=slug)
+    # Use select_related to get related sales data efficiently
+    sales = SaleItem.objects.filter(product=product).select_related('sale')
     
     context = {
         'title': f'Product: {product.name}',
         'product': product,
-        'regular_sales': regular_sales,
-        'bulk_sales': bulk_sales
+        'sales': sales,
     }
     return render(request, 'product_detail.html', context)
 
-# @login_required
+
 def product_edit(request, slug):
     product = get_object_or_404(Product, slug=slug)
-    form = ProductCreateForm(request.POST or None, instance=product, request=request)
     
-    if form.is_valid():
-        form.save()
-        messages.success(request, f'Product "{product.name}" updated successfully!')
-        return redirect('product_list')
+    if request.method == 'POST':
+        form = ProductCreateForm(request.POST, instance=product)
+        if form.is_valid():
+            # Pass form_edit=True to the save method
+            product = form.save(commit=False)
+            product.save(form_edit=True)
+            
+            messages.success(request, f'Product "{product.name}" updated successfully!')
+            return redirect('product_list')
+    else:
+        form = ProductCreateForm(instance=product)
     
     return render(request, 'product_form.html', {
         'title': f'Edit Product: {product.name}',
         'form': form
     })
 
-# @login_required
+
 def product_delete(request, slug):
     product = get_object_or_404(Product, slug=slug)
-    category = product.category  # Get the category before deleting the product
+    category = product.category
 
     if request.method == 'POST':
-        product_name = product.name  # Store the product name for the success message
-        product.delete()  # Delete the product
-        messages.success(request, f'Product "{product_name}" deleted successfully!')
+        with transaction.atomic():
+            product_name = product.name
+            product.delete()
+            messages.success(request, f'Product "{product_name}" deleted successfully!')
 
-        # Check if the category is empty after deletion
-        if category.products.count() == 0:
-            category_name = category.name  # Store the category name for the info message
-            category.delete()  # Delete the category if it has no products
-            messages.info(request, f'Category "{category_name}" was also deleted because it has no products.')
+            # Check if category is now empty
+            if not Product.objects.filter(category=category).exists():
+                category_name = category.name
+                category.delete()
+                messages.info(request, f'Category "{category_name}" was also deleted because it has no products.')
 
         return redirect('product_list')
     
@@ -172,179 +241,409 @@ def product_delete(request, slug):
         'product': product
     })
 
+
 # Sale Views
-# @login_required
-def regular_sale_create(request):
-    if request.method == 'POST':
-        form = RegularSaleForm(request.POST)
-        if form.is_valid():
-            sale = form.save(commit=False)
-            sale.seller = request.user
-
-            # Get the product and quantity sold
-            product = sale.product
-            quantity_sold = sale.quantity
-
-            # Check if there's enough stock
-            if product.quantity >= quantity_sold:
-                # Reduce the product quantity
-                product.quantity -= quantity_sold
-                product.save()
-
-                # Save the sale
-                sale.save()
-                messages.success(request, 'Regular sale recorded successfully!')
-                return redirect('regular_sale_list')
-            else:
-                messages.error(request, 'Not enough stock to complete the sale.')
-        else:
-            messages.error(request, 'Invalid form submission. Please check the data.')
-    else:
-        form = RegularSaleForm()
+def sale_create(request):
+    """Create a new sale with multiple sale items."""
+    # Get all products with stock for JavaScript and the form
     products = Product.objects.filter(quantity__gt=0)
-
-    return render(request, 'sale_form.html', {
-        'title': 'Create Regular Sale',
-        'form': form,
-         'products': products,
-    })
-
-# @login_required
-def bulk_sale_create(request):
+    
     if request.method == 'POST':
-        form = BulkSaleForm(request.POST)
-        if form.is_valid():
-            sale = form.save(commit=False)
-            sale.seller = request.user
-
-            # Get the product and quantity sold
-            product = sale.product
-            quantity_sold = sale.quantity
-
-            # Check if there's enough stock
-            if product.quantity >= quantity_sold:
-                # Reduce the product quantity
-                product.quantity -= quantity_sold
-                product.save()
-
-                # Save the sale
-                sale.save()
-                messages.success(request, 'Bulk sale recorded successfully!')
-                return redirect('bulk_sale_list')
-            else:
-                messages.error(request, 'Not enough stock to complete the sale.')
+        sale_form = SaleForm(request.POST)
+        
+        # Create a formset with the POST data
+        sale_item_formset = SaleItemFormSet(request.POST)
+        
+        if sale_form.is_valid() and sale_item_formset.is_valid():
+            try:
+                with transaction.atomic():
+                    # Create the sale
+                    sale = sale_form.save(commit=False)
+                    
+                    # Set the user if authenticated
+                    if request.user.is_authenticated:
+                        sale.user = request.user
+                    
+                    sale.save()
+                    
+                    # Process each item in the formset
+                    for form in sale_item_formset:
+                        # Skip empty forms
+                        if not form.has_changed() or not form.cleaned_data:
+                            continue
+                            
+                        # Skip deleted forms
+                        if form.cleaned_data.get('DELETE', False):
+                            continue
+                        
+                        # Get the product and check stock
+                        product = form.cleaned_data.get('product')
+                        quantity = form.cleaned_data.get('quantity', 0)
+                        sale_type = form.cleaned_data.get('sale_type', 'regular')
+                        
+                        # Skip if no product or quantity
+                        if not product or not quantity:
+                            continue
+                            
+                        # Important: Create the SaleItem but DON'T save it yet
+                        sale_item = form.save(commit=False)
+                        sale_item.sale = sale
+                        
+                        # Let the SaleItem.save() method handle the stock update
+                        # This prevents double stock reduction
+                        sale_item.save()
+                    
+                    # The sale.update_total_amount() is called by each SaleItem.save()
+                    # so we don't need to call it again
+                    
+                    messages.success(request, 'Sale recorded successfully!')
+                    return redirect('sale_detail', sale_id=sale.id)
+                    
+            except ValidationError as e:
+                messages.error(request, str(e))
         else:
-            messages.error(request, 'Invalid form submission. Please check the data.')
+            # Form validation errors
+            errors = []
+            if not sale_form.is_valid():
+                errors.append("Sale information has errors.")
+            
+            for i, form in enumerate(sale_item_formset):
+                if not form.is_valid():
+                    form_errors = form.errors.as_text()
+                    errors.append(f"Item #{i+1}: {form_errors}")
+            
+            error_message = "Please correct the errors: " + " ".join(errors)
+            messages.error(request, error_message)
     else:
-        form = BulkSaleForm()
-    products = Product.objects.filter(quantity__gt=0)
-
-    return render(request, 'sale_form.html', {
-        'title': 'Create Bulk Sale',
-        'form': form,
+        # GET request - create new forms
+        sale_form = SaleForm()
+        
+        # Initialize an empty formset with one form
+        sale_item_formset = SaleItemFormSet(queryset=SaleItem.objects.none())
+    
+    # Pass the product data to the template context
+    context = {
+        'title': 'Create Sale',
+        'sale_form': sale_form,
+        'sale_item_formset': sale_item_formset,
         'products': products,
-    })
+    }
+    
+    return render(request, 'sale_form.html', context)
 
-# @login_required
-# Regular Sale List
-def regular_sale_list(request):
-    sales = RegularSale.objects.all().order_by('-sale_date')
+
+def sale_list(request):
+    query = request.GET.get('q', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+
+    # Fetch sales with related items in a single query
+    sales = Sale.objects.prefetch_related('items__product').select_related('user').order_by('-sale_date')
+
+    # Filtering logic
+    filters = Q()
+    if query:
+        filters |= Q(user__username__icontains=query) | Q(id__icontains=query)
+    if start_date and end_date:
+        filters &= Q(sale_date__date__range=[start_date, end_date])
+    if filters:
+        sales = sales.filter(filters)
+
+    # Pagination
+    PAGE_SIZE = 10
+    paginator = Paginator(sales, PAGE_SIZE)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
     return render(request, 'sale_list.html', {
-        'title': 'Regular Sales',
-        'sales': sales,
-        'sale_type': 'regular'
+        'title': 'Sales',
+        'sales': page_obj,
+        'query': query,
+        'start_date': start_date,
+        'end_date': end_date,
     })
 
-# @login_required
-# Bulk Sale List
-def bulk_sale_list(request):
-    sales = BulkSale.objects.all().order_by('-sale_date')
-    return render(request, 'sale_list.html', {
-        'title': 'Bulk Sales',
-        'sales': sales,
-        'sale_type': 'bulk'
-    })
 
-# Inventory Statement Views
-# @login_required
-def statement_list(request):
-    statements = InventoryStatement.objects.all().order_by('-date')
-    return render(request, 'statement_list.html', {
-        'title': 'Modetex Ventures Nigeria Inventory Statements',
-        'statements': statements
-    })
 
-# @login_required
-def statement_detail(request, pk):
-    statement = get_object_or_404(InventoryStatement, pk=pk)
-    return render(request, 'statement_detail.html', {
-        'title': f'Statement: {statement.date}',
-        'statement': statement
-    })
+def sale_detail(request, sale_id):
+    sale = get_object_or_404(
+        Sale.objects.select_related('user').prefetch_related('items__product'),
+        id=sale_id
+    )
 
-# Export Views
-# @login_required
-def export_regular_sales(request):
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="regular_sales.csv"'
+    return render(request, 'sale_detail.html', {'sale': sale})
 
-    writer = csv.writer(response)
-    writer.writerow(['Product', 'Category', 'Quantity', 'Price Per Unit', 
-                    'Total Amount', 'Sale Date', 'Seller'])
 
-    sales = RegularSale.objects.all().select_related('product', 'product__category', 'seller')
-    for sale in sales:
-        writer.writerow([
-            sale.product.name,
-            sale.product.category.name,
-            sale.quantity,
-            sale.price_per_unit,
-            sale.total_amount,
-            sale.sale_date,
-            sale.seller.username if sale.seller else 'N/A'
-        ])
+def generate_receipt(request, sale_id):
+    sale = get_object_or_404(
+        Sale.objects.select_related('user').prefetch_related('items__product'),
+        id=sale_id
+    )
+
+    # Render template with sale data
+    html = render_to_string('receipt.html', {'sale': sale, 'company_name': 'Modetex'})
+
+    # Convert to PDF
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="receipt_{sale.id}.pdf"'
+
+    pisa_status = pisa.CreatePDF(html, dest=response)
+
+    if pisa_status.err:
+        return HttpResponse("Error generating receipt", status=500)
 
     return response
 
-# @login_required
-def export_bulk_sales(request):
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="bulk_sales.csv"'
+#Inventory Statement
+def generate_inventory_statement():
+    """
+    Generate an inventory statement with product stock levels and sales summary.
+    """
+    # Fetch all products
+    products = Product.objects.all()
 
-    writer = csv.writer(response)
-    writer.writerow(['Product', 'Category', 'Quantity', 'Bulk Price Per Unit', 
-                    'Total Amount', 'Sale Date', 'Seller'])
+    # Calculate the date 30 days ago
+    last_30_days = now() - timedelta(days=30)
 
-    sales = BulkSale.objects.all().select_related('product', 'product__category', 'seller')
-    for sale in sales:
+    # Fetch sales summary for the last 30 days
+    sales_summary = (
+        SaleItem.objects.filter(sale__sale_date__gte=last_30_days)
+        .values('product__name')
+        .annotate(total_sold=Sum('quantity'))
+    )
+
+    # Convert sales summary to a dictionary for easy lookup
+    sales_dict = {item['product__name']: item['total_sold'] for item in sales_summary}
+
+    # Prepare inventory data
+    inventory_data = []
+
+    for product in products:
+        inventory_data.append({
+            'name': product.name,
+            'category': product.category.name,
+            'stock_quantity': product.quantity,
+            'total_sold_last_30_days': sales_dict.get(product.name, 0),  # Default to 0 if no sales
+            'restock_needed': 'Yes' if product.needs_restock else 'No',
+            'regular_price': str(product.regular_price),
+            'bulk_price': str(product.bulk_price),
+        })
+
+    return inventory_data
+
+def save_inventory_statement():
+    """Save the generated inventory statement to the database."""
+    inventory_data = generate_inventory_statement()
+
+    # Use DjangoJSONEncoder to handle datetime serialization
+    inventory_data_json = json.dumps(inventory_data, cls=DjangoJSONEncoder)
+
+    # Save the inventory statement in a transaction
+    with transaction.atomic():
+        InventoryStatement.objects.create(report_data=inventory_data_json)
+
+def inventory_statement(request):
+    """Fetch and display the latest inventory statement or export it as CSV."""
+    # Get the latest inventory statement
+    latest_statement = InventoryStatement.objects.order_by('-generated_at').first()
+
+    # Load the report data if the statement exists
+    if latest_statement:
+        try:
+            inventory_data = json.loads(latest_statement.report_data)
+        except json.JSONDecodeError:
+            inventory_data = []
+    else:
+        inventory_data = []
+
+    # Check if the request is for CSV export
+    if 'export' in request.GET:
+        # Create the HttpResponse object with CSV headers
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="inventory_statement.csv"'
+
+        # Create a CSV writer
+        writer = csv.writer(response)
+
+        # Write the header row
         writer.writerow([
-            sale.product.name,
-            sale.product.category.name,
-            sale.quantity,
-            sale.bulk_price_per_unit,
-            sale.total_amount,
-            sale.sale_date,
-            sale.seller.username if sale.seller else 'N/A'
+            'Product Name', 'Category', 'Stock Quantity', 'Total Sold (Last 30 Days)',
+            'Restock Needed', 'Regular Price', 'Bulk Price'
         ])
 
-    return response
+        # Write the data rows
+        for item in inventory_data:
+            writer.writerow([
+                item['name'],
+                item['category'],
+                item['stock_quantity'],
+                item['total_sold_last_30_days'],
+                item['restock_needed'],
+                item['regular_price'],
+                item['bulk_price'],
+            ])
 
-# @login_required
-def export_inventory_statements(request):
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="inventory_statements.csv"'
+        return response
 
-    writer = csv.writer(response)
-    writer.writerow(['Date', 'Total Income', 'Total Products Sold', 
-                    'Total Products In Stock'])
+    # Render the template if not exporting
+    return render(request, 'inventory_statement.html', {'inventory_data': inventory_data})
 
+
+# Inventory Statement View
+def inventory_statement_list(request):
+    """View to list all inventory statements"""
     statements = InventoryStatement.objects.all()
-    for statement in statements:
-        writer.writerow([
-            statement.date,
-            statement.total_income,
-            statement.total_products_sold,
-            statement.total_products_in_stock
-        ])
+    return render(request, 'inventory_statement_list.html', {
+        'statements': statements,
+        'title': 'Inventory Statements'
+    })
 
+# @login_required
+def create_inventory_statement(request):
+    """View to create a new inventory statement."""
+    today = timezone.now().date()
+    existing_statement = InventoryStatement.objects.filter(date=today).first()
+    
+    if existing_statement:
+        messages.info(request, f'An inventory statement for today ({today}) already exists.')
+        return redirect('inventory_statement_detail', statement_id=existing_statement.id)
+    
+    if request.method == 'POST':
+        form = InventoryStatementForm(request.POST)
+        if form.is_valid():
+            statement = form.save(commit=False)
+            
+            # Set default prepared_by if not provided
+            if not statement.prepared_by and request.user.is_authenticated:
+                statement.prepared_by = request.user.get_full_name() or request.user.username
+            
+            statement.save()
+            
+            # Generate inventory statement items
+            item_count = statement.generate_statement_items()
+            
+            messages.success(request, f'Inventory statement for {statement.date} created with {item_count} items.')
+            return redirect('inventory_statement_detail', statement_id=statement.id)
+    else:
+        form = InventoryStatementForm(initial={
+            'date': today,
+            'company_name': 'Your Company Name'  # Default company name
+        })
+    
+    return render(request, 'inventory_statement_form.html', {
+        'form': form,
+        'title': 'Create Inventory Statement'
+    })
+
+# @login_required
+def inventory_statement_detail(request, statement_id):
+    """View to display a detailed inventory statement."""
+    statement = get_object_or_404(InventoryStatement, id=statement_id)
+    
+    # Update the inventory statement with the latest data
+    statement.generate_statement_items()
+    
+    items = statement.items.all()
+    
+    # Handle manual update of received stock
+    if request.method == 'POST':
+        formset = InventoryStatementItemFormSet(request.POST, instance=statement)
+        if formset.is_valid():
+            formset.save()
+            messages.success(request, 'Inventory statement updated successfully.')
+            return redirect('inventory_statement_detail', statement_id=statement.id)
+    else:
+        formset = InventoryStatementItemFormSet(instance=statement)
+    
+    # Calculate totals for inventory items
+    item_totals = items.aggregate(
+        total_opening=Sum('opening_stock'),
+        total_received=Sum('received_stock'),
+        total_invoiced=Sum('invoiced_stock'),
+        total_closing=Sum('closing_stock'),
+        total_variance=Sum('variance')
+    )
+    
+    # Add statement summary totals
+    summary_totals = {
+        'total_income': statement.total_income,
+        'total_products_sold': statement.total_products_sold,
+        'total_products_in_stock': statement.total_products_in_stock
+    }
+    
+    return render(request, 'inventory_statement_detail.html', {
+        'statement': statement,
+        'items': items,
+        'formset': formset,
+        'item_totals': item_totals,
+        'summary_totals': summary_totals,
+        'title': f'Inventory Statement: {statement.date}'
+    })
+
+# @login_required
+def regenerate_inventory_statement(request, statement_id):
+    """Regenerate inventory statement items"""
+    statement = get_object_or_404(InventoryStatement, id=statement_id)
+    
+    if request.method == 'POST':
+        # Regenerate all statement items
+        item_count = statement.generate_statement_items()
+        messages.success(request, f'Inventory statement regenerated with {item_count} items')
+        return redirect('inventory_statement_detail', statement_id=statement.id)
+    
+    return render(request, 'inventory/regenerate_confirmation.html', {
+        'statement': statement,
+        'title': 'Regenerate Inventory Statement'
+    })
+
+# @login_required
+def export_inventory_statement_csv(request, statement_id):
+    """Export inventory statement as CSV"""
+    statement = get_object_or_404(InventoryStatement, id=statement_id)
+    items = statement.items.all()
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="inventory_statement_{statement.date}.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Item Code', 'Item Name', 'Opening Stock', 'Received Stock', 
+                     'Invoiced Stock', 'Closing Stock', 'Variance', 'Remarks'])
+    
+    for item in items:
+        writer.writerow([
+            item.product.id,
+            item.product.name,
+            item.opening_stock,
+            item.received_stock,
+            item.invoiced_stock,
+            item.closing_stock,
+            item.variance,
+            item.remarks
+        ])
+    
     return response
+
+# @login_required
+def export_inventory_statement_pdf(request, statement_id):
+    """Export inventory statement as PDF"""
+    # This would require a PDF library like ReportLab or WeasyPrint
+    # For now, we'll create a print-friendly HTML page that can be saved as PDF from the browser
+    
+    statement = get_object_or_404(InventoryStatement, id=statement_id)
+    items = statement.items.all()
+    
+    # Calculate totals
+    totals = items.aggregate(
+        total_opening=Sum('opening_stock'),
+        total_received=Sum('received_stock'),
+        total_invoiced=Sum('invoiced_stock'),
+        total_closing=Sum('closing_stock'),
+        total_variance=Sum('variance')
+    )
+    
+    return render(request, 'inventory_statement_print.html', {
+        'statement': statement,
+        'items': items,
+        'totals': totals,
+        'title': f'Inventory Statement: {statement.date}'
+    })

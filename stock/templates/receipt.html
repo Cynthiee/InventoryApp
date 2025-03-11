@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Receipt #{{ sale.id }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 500px;
+            margin: auto;
+            padding: 15px;
+            border: 1px solid #ddd;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .header {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .subheader {
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        .info {
+            text-align: left;
+            margin-bottom: 10px;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .table th, .table td {
+            border: 1px solid #000;
+            padding: 5px;
+            text-align: left;
+            font-size: 13px;
+        }
+        .table th {
+            background-color: #f4f4f4;
+        }
+        .bulk-row {
+            background-color: #f0f8ff;
+        }
+        .total {
+            text-align: right;
+            font-weight: bold;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .sale-type {
+            font-size: 12px;
+            font-style: italic;
+            color: #555;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            border-top: 1px dotted #ccc;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">Modetex Sales Receipt</div>
+        <div class="subheader">Receipt #{{ sale.id }}</div>
+
+        <div class="info">
+            <p><strong>Date:</strong> {{ sale.sale_date|date:"Y-m-d H:i" }}</p>
+            <p><strong>Customer:</strong> {% if sale.user %}{{ sale.user.username }}{% else %}Walk-in Customer{% endif %}</p>
+        </div>
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Price Type</th>
+                    <th>Reg. Price (₦)</th>
+                    <th>Bulk Price (₦)</th>
+                    <th>Applied (₦)</th>
+                    <th>Total (₦)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in sale.items.all %}
+                <tr {% if item.sale_type == 'bulk' %}class="bulk-row"{% endif %}>
+                    <td>{{ item.product.name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.sale_type|title }}</td>
+                    <td>{{ item.product.regular_price|floatformat:2 }}</td>
+                    <td>{{ item.product.bulk_price|floatformat:2 }}</td>
+                    <td><strong>{{ item.price_per_unit|floatformat:2 }}</strong></td>
+                    <td>{{ item.total_price|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p class="total">Total: ₦{{ sale.total_amount|floatformat:2 }}</p>
+        
+        <div class="footer">
+            <p>Thank you for your patronage!</p>
+            <p>For inquiries, please contact: +234 8132055194</p>
+        </div>
+    </div>
+
+</body>
+</html>

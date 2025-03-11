@@ -3,49 +3,54 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="bg-white p-6 rounded-lg shadow-lg">
-    <h1 class="text-2xl font-bold mb-6">{{ title }}</h1>
-    <a href="{% if sale_type == 'regular' %}{% url 'regular_sale_create' %}{% else %}{% url 'bulk_sale_create' %}{% endif %}" 
-       class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-        Add {{ sale_type|title }} Sale
-    </a>
-    <div class="mt-6 overflow-x-auto">
+<div class="bg-white p-6 rounded-lg shadow-lg max-w-4xl mx-auto">
+    <!-- Title and Create Button -->
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">{{ title }}</h1>
+        <a href="{% url 'inventory_statement_list' %}" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+            Generate New Report
+        </a>
+    </div>
+
+    <!-- Statements List -->
+    <div class="overflow-x-auto">
         <table class="min-w-full bg-white">
-            <thead>
+            <thead class="bg-gray-100">
                 <tr>
-                    <th class="py-3 px-4 border-b text-left">Product</th>
-                    <th class="py-3 px-4 border-b text-left">Category</th>
-                    <th class="py-3 px-4 border-b text-left">Quantity</th>
-                    {% if sale_type == 'regular' %}
-                    <th class="py-3 px-4 border-b text-left">Regular Price Per Unit</th>
-                    {% else %}
-                    <th class="py-3 px-4 border-b text-left">Bulk Price Per Unit</th>
-                    {% endif %}
-                    <th class="py-3 px-4 border-b text-left">Total Amount</th>
-                    <th class="py-3 px-4 border-b text-left">Sale Date</th>
-                    <th class="py-3 px-4 border-b text-left">Seller</th>
+                    <th class="py-3 px-4 border-b text-left">Report Date</th>
+                    <th class="py-3 px-4 border-b text-left">Date Range</th>
+                    <th class="py-3 px-4 border-b text-left">Store/Location</th>
+                    <th class="py-3 px-4 border-b text-left">Prepared By</th>
+                    <th class="py-3 px-4 border-b text-left">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                {% for sale in sales %}
+                {% for statement in statements %}
                 <tr class="hover:bg-gray-50 transition duration-200">
-                    <td class="py-3 px-4 border-b">{{ sale.product.name }}</td>
-                    <td class="py-3 px-4 border-b">{{ sale.product.category.name }}</td>
-                    <td class="py-3 px-4 border-b">{{ sale.quantity }}</td>
-                    <td class="py-3 px-4 border-b">&#8358; 
-                        {% if sale_type == 'regular' %}
-                            {{ sale.price_per_unit }}
+                    <td class="py-3 px-4 border-b">{{ statement.date|date:"M d, Y H:i" }}</td>
+                    <td class="py-3 px-4 border-b">{{ statement.start_date|date:"M d, Y" }} to {{ statement.end_date|date:"M d, Y" }}</td>
+                    <td class="py-3 px-4 border-b">{{ statement.store_location }}</td>
+                    <td class="py-3 px-4 border-b">
+                        {% if statement.prepared_by %}
+                            {{ statement.prepared_by.get_full_name|default:statement.prepared_by.username }}
                         {% else %}
-                            {{ sale.bulk_price_per_unit }}
+                            -
                         {% endif %}
                     </td>
-                    <td class="py-3 px-4 border-b">&#8358; {{ sale.total_amount }}</td>
-                    <td class="py-3 px-4 border-b">{{ sale.sale_date|date:"Y-m-d" }}</td>
-                    <td class="py-3 px-4 border-b">{{ sale.seller.username }}</td>
+                    <td class="py-3 px-4 border-b">
+                        <div class="flex space-x-2">
+                            <a href="{% url 'inventory_statement_detail' statement.id %}" class="text-blue-500 hover:text-blue-700">
+                                View
+                            </a>
+                            <a href="{% url 'export_inventory_statement_csv' statement.id %}" class="text-green-500 hover:text-green-700">
+                                Export
+                            </a>
+                        </div>
+                    </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="py-3 px-4 border-b text-center text-gray-500">No sales found.</td>
+                    <td colspan="5" class="py-3 px-4 border-b text-center text-gray-500">No inventory reports found.</td>
                 </tr>
                 {% endfor %}
             </tbody>

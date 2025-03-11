@@ -25,7 +25,6 @@
 
             <!-- Right side -->  
             <div class="flex items-center space-x-4">  
-                
                 <!-- User menu -->  
                 <div class="relative">  
                     <button id="user-menu-button" class="text-slate-400 hover:text-white">  
@@ -71,37 +70,64 @@
                             Categories  
                         </div>  
                     </a>  
-                    <a href="{% url 'product_list' %}"   
-                       class="block px-4 py-2 rounded-lg hover:bg-blue-800 {% if 'product' in request.path %}bg-blue-800{% endif %}">  
-                        <div class="flex items-center">  
-                            <svg class="h-5 w-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">  
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"   
-                                      d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10m0-10V7m4 4h16"/>  
-                            </svg>  
-                            Products  
-                        </div>  
-                    </a>  
-                    <a href="{% url 'regular_sale_list' %}"   
-                       class="block px-4 py-2 rounded-lg hover:bg-blue-800 {% if 'sale' in request.path %}bg-blue-800{% endif %}">  
-                        <div class="flex items-center">  
-                            <svg class="h-5 w-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">  
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"   
-                                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>  
-                            </svg>  
-                            Regular Sales  
-                        </div>  
+                 <!-- Products Dropdown -->
+            <div>
+                <button id="products-dropdown-button" 
+                        class="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:bg-blue-800 {% if 'product' in request.path %}bg-blue-800{% endif %}">
+                    <div class="flex items-center">
+                        <svg class="h-5 w-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10m0-10V7m4 4h16"/>
+                        </svg>
+                        Products
+                    </div>
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <!-- Dropdown Menu -->
+                <div id="products-dropdown" class="hidden pl-8 mt-2 space-y-2">
+                    <a href="{% url 'product_list' %}" 
+                       class="block px-4 py-2 rounded-lg hover:bg-blue-800 {% if request.path == '/products/' %}bg-blue-800{% endif %}">
+                        Product List
                     </a>
-                    <a href="{% url 'bulk_sale_list' %}"   
-                    class="block px-4 py-2 rounded-lg hover:bg-blue-800 {% if 'sale' in request.path %}bg-blue-800{% endif %}">  
-                     <div class="flex items-center">  
-                         <svg class="h-5 w-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">  
-                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"   
-                                   d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>  
-                         </svg>  
-                         Bulk Sales  
-                     </div>  
-                 </a>  
-                    <a href="{% url 'statement_list' %}"   
+                    <a href="{% url 'product_create' %}" 
+                       class="block px-4 py-2 rounded-lg hover:bg-blue-800 {% if request.path == '/products/add/' %}bg-blue-800{% endif %}">
+                        Add Product
+                    </a>
+                </div>
+            </div>
+
+
+                   <!-- Replace your existing Sales link with this dropdown -->
+<div>
+    <button id="sales-dropdown-button" 
+            class="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:bg-blue-800 {% if 'sale' in request.path %}bg-blue-800{% endif %}">
+        <div class="flex items-center">
+            <svg class="h-5 w-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+            </svg>
+            Sales
+        </div>
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+    </button>
+    <!-- Dropdown Menu -->
+    <div id="sales-dropdown" class="hidden pl-8 mt-2 space-y-2">
+        <a href="{% url 'sale_list' %}" 
+           class="block px-4 py-2 rounded-lg hover:bg-blue-800 {% if request.path == '/sales/' %}bg-blue-800{% endif %}">
+            Sales List
+        </a>
+        <a href="{% url 'sale_create' %}" 
+           class="block px-4 py-2 rounded-lg hover:bg-blue-800 {% if request.path == '/sales/create/' %}bg-blue-800{% endif %}">
+            Create Sale
+        </a>
+    </div>
+</div>
+                    </a>  
+                    <a href="{% url 'inventory_statement_list' %}"   
                        class="block px-4 py-2 rounded-lg hover:bg-blue-800 {% if 'statement' in request.path %}bg-blue-800{% endif %}">  
                         <div class="flex items-center">  
                             <svg class="h-5 w-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">  
@@ -132,6 +158,43 @@
     </div>  
 
     <script>  
+        // Products dropdown toggle
+    const productsDropdownButton = document.getElementById('products-dropdown-button');
+    const productsDropdown = document.getElementById('products-dropdown');
+
+    productsDropdownButton.addEventListener('click', () => {
+        productsDropdown.classList.toggle('hidden');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (event) => {
+        if (!productsDropdownButton.contains(event.target) && !productsDropdown.contains(event.target)) {
+            productsDropdown.classList.add('hidden');
+        }
+    });
+
+    <!-- Add this JavaScript at the bottom of your script section -->
+// Sales dropdown toggle
+const salesDropdownButton = document.getElementById('sales-dropdown-button');
+const salesDropdown = document.getElementById('sales-dropdown');
+
+salesDropdownButton.addEventListener('click', () => {
+    salesDropdown.classList.toggle('hidden');
+});
+
+// Update your existing document click listener to also handle sales dropdown
+document.addEventListener('click', (event) => {
+    if (!userMenuButton.contains(event.target) && !userMenu.contains(event.target)) {
+        userMenu.classList.add('hidden');
+    }
+    if (!productsDropdownButton.contains(event.target) && !productsDropdown.contains(event.target)) {
+        productsDropdown.classList.add('hidden');
+    }
+    if (!salesDropdownButton.contains(event.target) && !salesDropdown.contains(event.target)) {
+        salesDropdown.classList.add('hidden');
+    }
+});
+    
         // Mobile menu toggle  
         const mobileMenuButton = document.getElementById('mobile-menu-button');  
         const sidebar = document.getElementById('sidebar');  

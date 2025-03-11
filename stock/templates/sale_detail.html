@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}Sale Detail - #{{ sale.id }}{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold mb-4 text-center">Modetex Stores Sale Details</h1>
+
+    <div class="mb-4">
+        <p><strong>Sale ID:</strong> {{ sale.id }}</p>
+        <p><strong>Customer:</strong> {{ sale.user.username }}</p>
+        <p><strong>Date:</strong> {{ sale.sale_date|date:"Y-m-d H:i" }}</p>
+    </div>
+
+    <table class="min-w-full bg-white border border-gray-300 rounded-lg">
+        <thead class="bg-gray-100">
+            <tr>
+                <th class="py-3 px-4 border-b text-left">Product</th>
+                <th class="py-3 px-4 border-b text-left">Quantity</th>
+                <th class="py-3 px-4 border-b text-left">Unit Price (₦)</th>
+                <th class="py-3 px-4 border-b text-left">Total Price (₦)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in sale.items.all %}
+            <tr class="border-b">
+                <td class="py-3 px-4">{{ item.product.name }}</td>
+                <td class="py-3 px-4">{{ item.quantity }}</td>
+                <td class="py-3 px-4">{{ item.price_per_unit }}</td>
+                <td class="py-3 px-4">{{ item.total_price }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="mt-4 text-right font-bold">
+        <p>Total Sales: ₦{{ sale.total_amount }}</p>
+    </div>
+
+    <div class="mt-6 flex justify-between">
+        <a href="{% url 'sale_list' %}" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600">
+            Back to Sales
+        </a>
+        <a href="{% url 'generate_receipt' sale.id %}" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+            Download Receipt
+        </a>
+    </div>
+</div>
+{% endblock %}

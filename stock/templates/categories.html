@@ -7,7 +7,7 @@
         <div class="flex justify-between items-center">
             <h2 class="text-xl font-medium text-gray-900">Product Categories</h2>
             <a href="{% url 'product_create' %}" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                Add Category
+                Add Product (and Category)
             </a>
         </div>
     </div>
@@ -24,13 +24,13 @@
                 <div class="mt-4">
                     <div class="flex items-center space-x-2">
                         <span class="text-sm text-gray-700">Products:</span>
-                        <span class="text-lg font-semibold text-blue-600">{{ category.product_set.count }}</span>
+                        <span class="text-lg font-semibold text-blue-600">{{ category.products.count }}</span>
                     </div>
                 </div>
             </a>
             {% empty %}
             <div class="col-span-full text-center py-8 text-gray-500">
-                No categories found. Create your first category!
+                No categories found. Add a product to create a category!
             </div>
             {% endfor %}
         </div>

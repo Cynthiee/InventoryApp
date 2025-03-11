@@ -3,7 +3,7 @@
 {% block content %}
 <div class="mx-auto px-6 w-full max-w-4xl min-h-screen bg-slate-200 py-8">
     <div class="bg-white rounded-lg shadow-md p-6">
-        <h1 class="font-bold p-2 text-gray-800 text-3xl text-center mb-6">{{title}}</h1>
+        <h1 class="font-bold p-2 text-gray-800 text-3xl text-center mb-6">{{ title }}</h1>
         
         {% if messages %}
         <div class="mb-4">
@@ -21,8 +21,9 @@
         <form method="POST" class="space-y-4">
             {% csrf_token %}
             
+            <!-- Category and New Category Fields -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="form-group">
+                <div class="form-group custom-select-wrapper">
                     {{ form.category|as_crispy_field }}
                 </div>
                 <div class="form-group">
@@ -30,6 +31,7 @@
                 </div>
             </div>
 
+            <!-- Product Name and Quantity Fields -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="form-group">
                     {{ form.name|as_crispy_field }}
@@ -39,6 +41,7 @@
                 </div>
             </div>
 
+            <!-- Regular Price and Bulk Price Fields -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="form-group">
                     {{ form.regular_price|as_crispy_field }}
@@ -48,6 +51,7 @@
                 </div>
             </div>
 
+            <!-- Minimum Bulk Quantity and Restock Level Fields -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="form-group">
                     {{ form.minimum_bulk_quantity|as_crispy_field }}
@@ -57,10 +61,17 @@
                 </div>
             </div>
 
+            <!-- Stock Warning -->
             <div id="stock-warning" class="hidden p-4 bg-yellow-100 text-yellow-700 rounded-lg mb-4">
                 Warning: Initial quantity is below restock level!
             </div>
 
+            <!-- Bulk Price Warning -->
+            <div id="bulk-price-warning" class="hidden p-4 bg-red-100 text-red-700 rounded-lg mb-4">
+                Warning: Bulk price is higher than regular price!
+            </div>
+
+            <!-- Save and Cancel Buttons -->
             <div class="flex justify-center mt-6">
                 <button type="submit" class="btn bg-blue-950 text-zinc-400 hover:bg-blue-900 sm:btn-sm md:btn-md lg:btn-lg">
                     Save Product
@@ -79,19 +90,43 @@ document.addEventListener('DOMContentLoaded', function() {
     const restockInput = document.querySelector('input[name="restock_level"]');
     const warningDiv = document.getElementById('stock-warning');
 
+    const regularPriceInput = document.querySelector('input[name="regular_price"]');
+    const bulkPriceInput = document.querySelector('input[name="bulk_price"]');
+    const bulkPriceWarningDiv = document.getElementById('bulk-price-warning');
+
     function checkStockLevel() {
         const quantity = parseInt(quantityInput.value) || 0;
         const restockLevel = parseInt(restockInput.value) || 0;
 
-        if (quantity <= restockLevel) {
+        // Only show warning if both fields have values and quantity <= restockLevel
+        if (quantityInput.value && restockInput.value && quantity <= restockLevel) {
             warningDiv.classList.remove('hidden');
         } else {
             warningDiv.classList.add('hidden');
         }
     }
 
+    function checkBulkPrice() {
+        const regularPrice = parseFloat(regularPriceInput.value) || 0;
+        const bulkPrice = parseFloat(bulkPriceInput.value) || 0;
+
+        // Show warning if bulk price is higher than regular price
+        if (bulkPrice > regularPrice) {
+            bulkPriceWarningDiv.classList.remove('hidden');
+        } else {
+            bulkPriceWarningDiv.classList.add('hidden');
+        }
+    }
+
     quantityInput.addEventListener('input', checkStockLevel);
     restockInput.addEventListener('input', checkStockLevel);
+
+    regularPriceInput.addEventListener('input', checkBulkPrice);
+    bulkPriceInput.addEventListener('input', checkBulkPrice);
+
+    // Initial checks on page load
+    checkStockLevel();
+    checkBulkPrice();
 });
 </script>
 {% endblock content %}

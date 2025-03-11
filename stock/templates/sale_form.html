@@ -1,37 +1,262 @@
-{% extends 'base.html' %}
-{% load crispy_forms_tags %}
-
-{% block title %}{{ title }}{% endblock %}
+{% extends "base.html" %}
 
 {% block content %}
-<div class="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto">
-    <h1 class="text-2xl font-bold mb-6 text-center">{{ title }}</h1>
-    
-    {% if messages %}
-    <div class="mb-4">
-        {% for message in messages %}
-        <div class="p-4 rounded-lg
-            {% if message.tags == 'success' %}bg-green-100 text-green-700
-            {% elif message.tags == 'warning' %}bg-yellow-100 text-yellow-700
-            {% else %}bg-red-100 text-red-700{% endif %}">
-            {{ message }}
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+<div class="container mx-auto mt-6 p-6 bg-white shadow-md rounded-lg">
+    <h2 class="text-2xl font-semibold mb-4">Create Sale</h2>
 
-    <form method="post" class="space-y-4">
+    <form method="post" id="saleForm" class="space-y-4">
         {% csrf_token %}
-        {{ form|crispy }}
-        <div class="flex justify-center mt-6">
-            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                Save Sale
-            </button>
-            <a href="{% if sale_type == 'regular' %}{% url 'regular_sale_list' %}{% else %}{% url 'bulk_sale_list' %}{% endif %}" 
-               class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 ml-2">
-                Cancel
-            </a>
+
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700">{{ sale_form.user.label_tag }}</label>
+            {{ sale_form.user }}
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white border border-gray-300 rounded-lg">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="py-2 px-4 border">Product</th>
+                        <th class="py-2 px-4 border">Sale Type</th>
+                        <th class="py-2 px-4 border">Quantity</th>
+                        <th class="py-2 px-4 border">Price (₦)</th>
+                        <th class="py-2 px-4 border">Total (₦)</th>
+                        <th class="py-2 px-4 border">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="saleItemsTable">
+                    {{ sale_item_formset.management_form }}
+                    {% for form in sale_item_formset %}
+                    <tr class="sale-item border-t" data-form-index="{{ forloop.counter0 }}">
+                        <td class="py-2 px-4">
+                            {{ form.product }}
+                            {{ form.id }}
+                        </td>
+                        <td class="py-2 px-4">{{ form.sale_type }}</td>
+                        <td class="py-2 px-4">{{ form.quantity }}</td>
+                        <td class="py-2 px-4 text-center price">0.00</td>
+                        <td class="py-2 px-4 text-center total">0.00</td>
+                        <td class="py-2 px-4 text-center">
+                            {% if forloop.counter > 1 %}
+                                <button type="button" class="bg-red-500 text-white px-3 py-1 rounded remove-item">X</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <button type="button" id="addItem" class="bg-blue-500 text-white px-4 py-2 rounded mt-3">+ Add More</button>
+
+        <div class="mt-4 text-lg font-semibold">
+            Final Total: ₦<span id="finalTotal">0.00</span>
+        </div>
+
+        <div class="mt-6 flex justify-between">
+            <!-- Cancel Button -->
+            <a href="{% url 'sale_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded">Cancel</a>
+        
+            <!-- Save Sale Button -->
+            <button type="submit" class="bg-green-500 text-white px-6 py-2 rounded block">Save Sale</button>
         </div>
     </form>
 </div>
+
+<script>
+    // Store product data for JavaScript use
+    const productData = {
+        {% for product in products %}
+            "{{ product.id }}": {
+                "name": "{{ product.name }}",
+                "regular_price": {{ product.regular_price }},
+                "bulk_price": {{ product.bulk_price }},
+                "quantity": {{ product.quantity }},
+                "minimum_bulk_quantity": {{ product.minimum_bulk_quantity|default:1 }}
+            }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    };
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const formsetPrefix = "{{ sale_item_formset.prefix }}";
+        const tableBody = document.querySelector("#saleItemsTable");
+        const addItemBtn = document.getElementById("addItem");
+        const finalTotalElement = document.getElementById("finalTotal");
+        const totalFormsInput = document.querySelector(`#id_${formsetPrefix}-TOTAL_FORMS`);
+        
+        // Set initial total forms count
+        updateFormCount();
+        
+        function updateFormCount() {
+            const formRows = document.querySelectorAll(".sale-item");
+            totalFormsInput.value = formRows.length;
+        }
+        
+        function updatePrices() {
+            let finalTotal = 0;
+            document.querySelectorAll(".sale-item").forEach((row) => {
+                const productSelect = row.querySelector(`select[name$='-product']`);
+                const saleTypeSelect = row.querySelector(`select[name$='-sale_type']`);
+                const quantityInput = row.querySelector(`input[name$='-quantity']`);
+                const priceCell = row.querySelector(".price");
+                const totalCell = row.querySelector(".total");
+    
+                function recalculate() {
+                    if (!productSelect.value) {
+                        priceCell.textContent = "0.00";
+                        totalCell.textContent = "0.00";
+                        return;
+                    }
+                    
+                    const productId = productSelect.value;
+                    const product = productData[productId];
+                    
+                    if (!product) {
+                        priceCell.textContent = "0.00";
+                        totalCell.textContent = "0.00";
+                        return;
+                    }
+                    
+                    const saleType = saleTypeSelect.value;
+                    const pricePerUnit = saleType === "bulk" ? product.bulk_price : product.regular_price;
+                    const quantity = parseInt(quantityInput.value) || 0;
+                    
+                    // Apply business rules
+                    if (saleType === "bulk" && quantity < product.minimum_bulk_quantity) {
+                        quantityInput.value = product.minimum_bulk_quantity;
+                    }
+                    
+                    if (quantity > product.quantity) {
+                        alert(`Only ${product.quantity} units of ${product.name} are available.`);
+                        quantityInput.value = product.quantity;
+                    }
+                    
+                    const total = pricePerUnit * parseInt(quantityInput.value);
+                    
+                    priceCell.textContent = pricePerUnit.toFixed(2);
+                    totalCell.textContent = total.toFixed(2);
+                    updateFinalTotal();
+                }
+    
+                productSelect.addEventListener("change", recalculate);
+                saleTypeSelect.addEventListener("change", recalculate);
+                quantityInput.addEventListener("input", recalculate);
+    
+                // Initial calculation
+                recalculate();
+            });
+        }
+    
+        function updateFinalTotal() {
+            let total = 0;
+            document.querySelectorAll(".total").forEach((cell) => {
+                total += parseFloat(cell.textContent);
+            });
+            finalTotalElement.textContent = total.toFixed(2);
+        }
+    
+        addItemBtn.addEventListener("click", function () {
+            // Get the current form count
+            const formCount = document.querySelectorAll(".sale-item").length;
+            
+            // Clone the first form row
+            const firstRow = document.querySelector(".sale-item");
+            const newRow = firstRow.cloneNode(true);
+            
+            // Update form indices
+            newRow.setAttribute("data-form-index", formCount);
+            
+            // Update input names and ids
+            newRow.querySelectorAll("input, select").forEach(input => {
+                const name = input.getAttribute("name");
+                const id = input.getAttribute("id");
+                
+                if (name) {
+                    const newName = name.replace(/-\d+-/, `-${formCount}-`);
+                    input.setAttribute("name", newName);
+                }
+                
+                if (id) {
+                    const newId = id.replace(/-\d+-/, `-${formCount}-`);
+                    input.setAttribute("id", newId);
+                }
+                
+                // Clear values
+                if (input.tagName === "SELECT") {
+                    input.selectedIndex = 0;
+                } else if (input.type !== "hidden" && input.type !== "checkbox") {
+                    input.value = "";
+                }
+            });
+            
+            // Reset price and total cells
+            newRow.querySelector(".price").textContent = "0.00";
+            newRow.querySelector(".total").textContent = "0.00";
+            
+            // Add remove button if it doesn't exist
+            if (!newRow.querySelector(".remove-item")) {
+                const cell = newRow.querySelector("td:last-child");
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "bg-red-500 text-white px-3 py-1 rounded remove-item";
+                button.textContent = "X";
+                cell.appendChild(button);
+            }
+            
+            // Add the new row to the table
+            tableBody.appendChild(newRow);
+            
+            // Update the form count
+            updateFormCount();
+            
+            // Initialize event listeners for the new row
+            updatePrices();
+        });
+    
+        // Event delegation for remove buttons
+        tableBody.addEventListener("click", function (e) {
+            if (e.target.classList.contains("remove-item")) {
+                // Remove the row
+                e.target.closest("tr").remove();
+                
+                // Update form indices for all remaining rows
+                const rows = document.querySelectorAll(".sale-item");
+                rows.forEach((row, index) => {
+                    row.setAttribute("data-form-index", index);
+                    
+                    row.querySelectorAll("input, select").forEach(input => {
+                        const name = input.getAttribute("name");
+                        const id = input.getAttribute("id");
+                        
+                        if (name) {
+                            const newName = name.replace(/-\d+-/, `-${index}-`);
+                            input.setAttribute("name", newName);
+                        }
+                        
+                        if (id) {
+                            const newId = id.replace(/-\d+-/, `-${index}-`);
+                            input.setAttribute("id", newId);
+                        }
+                    });
+                });
+                
+                // Update the form count
+                updateFormCount();
+                
+                // Update totals
+                updateFinalTotal();
+            }
+        });
+    
+        // Initialize price calculations
+        updatePrices();
+    
+        // Display Django Messages as a Popup Alert
+        {% if messages %}
+            {% for message in messages %}
+                alert("{{ message|escapejs }}");
+            {% endfor %}
+        {% endif %}
+    });
+</script>    
 {% endblock %}

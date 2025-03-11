@@ -5,57 +5,83 @@
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
     <!-- Total Products Card -->
     <div class="bg-white rounded-lg shadow p-6">
-        <a href="{% url "category_list" %}"></a>
-        <div class="flex items-center justify-between">
-            <h3 class="text-gray-500 text-sm font-medium">Total Products</h3>
-            <svg class="h-8 w-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10"/>
-            </svg>
-        </div>
-        <p class="mt-2 text-3xl font-bold text-gray-900">{{ total_products }}</p>
+        <a href="{% url 'product_list' %}">
+            <div class="flex items-center justify-between">
+                <h3 class="text-gray-500 text-sm font-medium">Total Products</h3>
+                <svg class="h-8 w-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10"/>
+                </svg>
+            </div>
+            <p class="mt-2 text-3xl font-bold text-gray-900">{{ total_products }}</p>
+        </a>
     </div>
 
     <!-- Low Stock Card -->
     <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center justify-between">
-            <h3 class="text-gray-500 text-sm font-medium">Low Stock Items</h3>
-            <svg class="h-8 w-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
-        </div>
-        <p class="mt-2 text-3xl font-bold text-gray-900">{{ low_stock_count }}</p>
+        <a href="{% url 'product_list' %}?needs_restock=True">
+            <div class="flex items-center justify-between">
+                <h3 class="text-gray-500 text-sm font-medium">Low Stock Items</h3>
+                <svg class="h-8 w-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            <p class="mt-2 text-3xl font-bold text-gray-900">{{ low_stock_count }}</p>
+        </a>
     </div>
 
     <!-- Today's Sales Card -->
     <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center justify-between">
-            <h3 class="text-gray-500 text-sm font-medium">Today's Sales</h3>
-            <svg class="h-8 w-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-        </div>
-        <p class="mt-2 text-3xl font-bold text-gray-900">{{ today_sales }}</p>
+        <a href="{% url 'sale_list' %}">
+            <div class="flex items-center justify-between">
+                <h3 class="text-gray-500 text-sm font-medium">Today's Sales</h3>
+                <svg class="h-8 w-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <p class="mt-2 text-3xl font-bold text-gray-900">{{ today_sales }}</p>
+        </a>
     </div>
 
     <!-- Today's Income Card -->
     <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center justify-between">
-            <h3 class="text-gray-500 text-sm font-medium">Today's Income</h3>
-            <svg class="h-8 w-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-            </svg>
-        </div>
-        <p class="mt-2 text-3xl font-bold text-gray-900">
-            &#8358; {{ statement.total_income|default:"0.00" }}
-        </p>
+        <a href="{% url 'inventory_statement_list' %}">
+            <div class="flex items-center justify-between">
+                <h3 class="text-gray-500 text-sm font-medium">Today's Income</h3>
+                <svg class="h-8 w-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            <p class="mt-2 text-3xl font-bold text-gray-900">
+                &#8358; {{ statement.total_income|default:"0.00" }}
+            </p>
+        </a>
     </div>
 </div>
 
 <!-- Recent Activity Section -->
-<div class="mt-8">
+{% comment %} <div class="mt-8">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
-    <div class="bg-white shadow rounded-lg">
-        <!-- Add your recent activity content here -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="space-y-4">
+            {% if recent_sales %}
+                {% for sale in recent_sales %}
+                    <div class="flex items-center justify-between border-b pb-2">
+                        <div>
+                            <p class="text-sm text-gray-700">
+                                <span class="font-medium">{{ sale.user.username }}</span> sold 
+                                <span class="font-medium">{{ sale.items.count }}</span> items.
+                            </p>
+                            <p class="text-xs text-gray-500">{{ sale.sale_date }}</p>
+                        </div>
+                        <p class="text-sm font-medium text-green-600">
+                            &#8358; {{ sale.total_amount }}
+                        </p>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-sm text-gray-500">No recent activity.</p>
+            {% endif %}
+        </div>
     </div>
-</div>
+</div> {% endcomment %}
 {% endblock %}

@@ -1,0 +1,68 @@
+<!-- templates/inventory/inventory_statement_list.html -->
+{% extends "base.html" %}
+
+{% block title %}Inventory Statements{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Inventory Statements</h1>
+        <a href="{% url 'create_inventory_statement' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Create Today's Statement
+        </a>
+    </div>
+
+    <!-- Error Messages (if any) -->
+    {% if messages %}
+        <div class="mb-4">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Inventory Statements Table -->
+    {% if statements %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Company</th>
+                        <th scope="col">Prepared By</th>
+                        <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for statement in statements %}
+                    <tr>
+                        <td>{{ statement.date|date:"d M Y" }}</td>
+                        <td>{{ statement.company_name|default:"Your Company" }}</td>
+                        <td>{{ statement.prepared_by|default:"N/A" }}</td>
+                        <td class="text-end">
+                            <!-- View Button -->
+                            <a href="{% url 'inventory_statement_detail' statement_id=statement.id %}" 
+                               class="btn btn-sm btn-info me-2" 
+                               aria-label="View Statement">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+
+                         
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <!-- No Statements Found -->
+        <div class="alert alert-info">
+            <p>No inventory statements found. <a href="{% url 'create_inventory_statement' %}" class="alert-link">Create today's inventory statement</a>.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

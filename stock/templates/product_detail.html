@@ -34,8 +34,22 @@
             <p class="text-gray-900">{{ product.quantity }}</p>
         </div>
         <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Restock Level:</strong></p>
+            <p class="text-gray-900">{{ product.restock_level }}</p>
+        </div>
+        <div class="flex justify-between">
             <p class="text-gray-700"><strong>Date Added:</strong></p>
-            <p class="text-gray-900">{{ product.created }}</p>
+            <p class="text-gray-900">{{ product.created|date:"F j, Y H:i" }}</p>
+        </div>
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Status:</strong></p>
+            <p class="text-gray-900">
+                {% if product.restock_level %}
+                    <span class="text-green-600">In Stock</span>
+                {% else %}
+                    <span class="text-red-600">Out of Stock</span>
+                {% endif %}
+            </p>
         </div>
     </div>
 
