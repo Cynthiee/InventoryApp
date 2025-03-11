@@ -1,60 +1,96 @@
-{% extends 'base.html' %}
-
+{% extends "base.html" %}
 {% block title %}{{ title }}{% endblock %}
-
 {% block content %}
-<div class="bg-white p-6 rounded-lg shadow-lg max-w-4xl mx-auto">
-    <!-- Title and Create Button -->
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold text-gray-800">{{ title }}</h1>
-        <a href="{% url 'inventory_statement_list' %}" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-            Generate New Report
-        </a>
-    </div>
+<div class="mx-auto px-6 w-full max-w-7xl min-h-screen bg-slate-200 py-8">
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h1 class="font-bold p-2 text-gray-800 text-3xl text-center mb-6">{{ title }}</h1>
 
-    <!-- Statements List -->
-    <div class="overflow-x-auto">
-        <table class="min-w-full bg-white">
-            <thead class="bg-gray-100">
-                <tr>
-                    <th class="py-3 px-4 border-b text-left">Report Date</th>
-                    <th class="py-3 px-4 border-b text-left">Date Range</th>
-                    <th class="py-3 px-4 border-b text-left">Store/Location</th>
-                    <th class="py-3 px-4 border-b text-left">Prepared By</th>
-                    <th class="py-3 px-4 border-b text-left">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for statement in statements %}
-                <tr class="hover:bg-gray-50 transition duration-200">
-                    <td class="py-3 px-4 border-b">{{ statement.date|date:"M d, Y H:i" }}</td>
-                    <td class="py-3 px-4 border-b">{{ statement.start_date|date:"M d, Y" }} to {{ statement.end_date|date:"M d, Y" }}</td>
-                    <td class="py-3 px-4 border-b">{{ statement.store_location }}</td>
-                    <td class="py-3 px-4 border-b">
-                        {% if statement.prepared_by %}
-                            {{ statement.prepared_by.get_full_name|default:statement.prepared_by.username }}
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td class="py-3 px-4 border-b">
-                        <div class="flex space-x-2">
-                            <a href="{% url 'inventory_statement_detail' statement.id %}" class="text-blue-500 hover:text-blue-700">
-                                View
+        <!-- Filter Form -->
+        <form method="GET" class="mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Search by User or Sale ID -->
+                <div class="form-group">
+                    <input type="text" name="q" value="{{ query }}" class="w-full p-2 border rounded-lg" placeholder="Search by User or Sale ID">
+                </div>
+                <!-- Start Date -->
+                <div class="form-group">
+                    <input type="date" name="start_date" value="{{ start_date }}" class="w-full p-2 border rounded-lg" placeholder="Start Date">
+                </div>
+                <!-- End Date -->
+                <div class="form-group">
+                    <input type="date" name="end_date" value="{{ end_date }}" class="w-full p-2 border rounded-lg" placeholder="End Date">
+                </div>
+            </div>
+            <div class="flex justify-center mt-4">
+                <button type="submit" class="btn bg-blue-950 text-zinc-400 hover:bg-blue-900 sm:btn-sm md:btn-md lg:btn-lg">
+                    Apply Filters
+                </button>
+                <a href="{% url 'sale_list' %}" class="btn bg-gray-500 text-zinc-400 hover:bg-gray-600 sm:btn-sm md:btn-md lg:btn-lg ml-2">
+                    Clear Filters
+                </a>
+            </div>
+        </form>
+
+        <!-- Sales Table -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white border border-gray-200">
+                <thead class="bg-gray-800 text-white">
+                    <tr>
+                        <th class="p-3 text-left">Sale ID</th>
+                        <th class="p-3 text-left">User</th>
+                        <th class="p-3 text-left">Date</th>
+                        <th class="p-3 text-left">Total Amount</th>
+                        <th class="p-3 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sales %}
+                    <tr class="border-b border-gray-200 hover:bg-gray-100">
+                        <td class="p-3">{{ sale.id }}</td>
+                        <td class="p-3">{{ sale.user.username|default:"Anonymous" }}</td>
+                        <td class="p-3">{{ sale.sale_date|date:"d M Y H:i" }}</td>
+                        <td class="p-3">₦{{ sale.total_amount|floatformat:2 }}</td>
+                        <td class="p-3">
+                            <a href="{% url 'sale_detail' sale_id=sale.id %}" class="text-blue-600 hover:text-blue-800">
+                                View Details
                             </a>
-                            <a href="{% url 'export_inventory_statement_csv' statement.id %}" class="text-green-500 hover:text-green-700">
-                                Export
-                            </a>
-                        </div>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="5" class="py-3 px-4 border-b text-center text-gray-500">No inventory reports found.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="p-3 text-center">No sales found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-center mt-6">
+            <nav>
+                <ul class="pagination">
+                    {% if sales.has_previous %}
+                    <li class="page-item">
+                        <a href="?page=1&q={{ query }}&start_date={{ start_date }}&end_date={{ end_date }}" class="page-link">First</a>
+                    </li>
+                    <li class="page-item">
+                        <a href="?page={{ sales.previous_page_number }}&q={{ query }}&start_date={{ start_date }}&end_date={{ end_date }}" class="page-link">Previous</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item active">
+                        <span class="page-link">Page {{ sales.number }} of {{ sales.paginator.num_pages }}</span>
+                    </li>
+                    {% if sales.has_next %}
+                    <li class="page-item">
+                        <a href="?page={{ sales.next_page_number }}&q={{ query }}&start_date={{ start_date }}&end_date={{ end_date }}" class="page-link">Next</a>
+                    </li>
+                    <li class="page-item">
+                        <a href="?page={{ sales.paginator.num_pages }}&q={{ query }}&start_date={{ start_date }}&end_date={{ end_date }}" class="page-link">Last</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
     </div>
 </div>
 {% endblock %}
