@@ -14,17 +14,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 
 
-SECRET_KEY = os.getenv('SECRET_KEY')
+SECRET_KEY = os.getenv('SECRET_KEY', 'default-dev-key')
 # SECURITY WARNING: don't run with debug turned on in production!
 
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "modetexstore.onrender.com,localhost,127.0.0.1").split(",")
 
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://modetexstore.onrender.com"
-]
+# CSRF_TRUSTED_ORIGINS = [
+#     "https://modetexstore.onrender.com"
+# ]
 
 # Application definition
 
