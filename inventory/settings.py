@@ -19,7 +19,7 @@ SECRET_KEY = 'django-insecure-50)_a4$5n)*)vkw30rf2)%kn2mwf1tp^thlxo*z0knr-0up$z4
 
 DEBUG = False
 
-ALLOWED_HOSTS = ["modetexstore.onrender.com", "localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["modetex-store.onrender.com", "localhost", "127.0.0.1"]
 
 
 
