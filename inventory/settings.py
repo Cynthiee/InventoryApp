@@ -1,6 +1,6 @@
-import os
 from pathlib import Path
 import dj_database_url
+import socket
 
 
 
@@ -82,13 +82,33 @@ WSGI_APPLICATION = 'inventory.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default='postgresql://modetex:GR0ZxsKfpP9mToBr6Z8UrpmcSPllowNh@dpg-cvaaft3qf0us73ct2f00-a/modetex_xe5t',
-        conn_max_age=600
-    )
-}
+# Function to check if we're running on Render
+def is_running_on_render():
+    # This checks if the hostname matches Render's pattern
+    # You might need to adjust this based on actual Render hostnames
+    try:
+        hostname = socket.gethostname()
+        return 'render' in hostname.lower()
+    except:
+        return False
 
+# Configure databases based on environment
+if is_running_on_render():
+    # On Render - use remote PostgreSQL
+    DATABASES = {
+        'default': dj_database_url.config(
+            default='postgresql://modetex:GR0ZxsKfpP9mToBr6Z8UrpmcSPllowNh@dpg-cvaaft3qf0us73ct2f00-a/modetex_xe5t',
+            conn_max_age=600
+        )
+    }
+else:
+    # Local development - use SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
