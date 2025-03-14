@@ -1,9 +1,9 @@
 import os
 from pathlib import Path
 import dj_database_url
-from dotenv import load_dotenv
 
-load_dotenv()
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -14,12 +14,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'default-dev-key')
+SECRET_KEY = 'django-insecure-50)_a4$5n)*)vkw30rf2)%kn2mwf1tp^thlxo*z0knr-0up$z4'
 # SECURITY WARNING: don't run with debug turned on in production!
 
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DEBUG = False
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "modetexstore.onrender.com,localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = ["modetexstore.onrender.com", "localhost", "127.0.0.1"]
+
 
 
 # CSRF_TRUSTED_ORIGINS = [
@@ -83,7 +84,7 @@ WSGI_APPLICATION = 'inventory.wsgi.application'
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv("DATABASE_URL"),
+        default='postgresql://modetex:GR0ZxsKfpP9mToBr6Z8UrpmcSPllowNh@dpg-cvaaft3qf0us73ct2f00-a/modetex_xe5t',
         conn_max_age=600
     )
 }
