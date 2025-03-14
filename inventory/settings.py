@@ -19,7 +19,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'default-dev-key')
 
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "modetexstore.onrender.com,localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS").split(",")
 
 
 CSRF_TRUSTED_ORIGINS = [
