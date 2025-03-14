@@ -1,8 +1,10 @@
 from django import forms
-from django.forms import inlineformset_factory
+from django.db import IntegrityError
+from django.forms import ValidationError, inlineformset_factory
 from .models import Category, Product, Sale, SaleItem, InventoryStatement, InventoryStatementItem
 from django.utils.text import slugify
 from django.utils import timezone
+from django.db import transaction
 
 class CategoryForm(forms.ModelForm):
     class Meta:
@@ -21,7 +23,6 @@ class CategoryForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
-
 
 class ProductCreateForm(forms.ModelForm):
     category = forms.ModelChoiceField(queryset=Category.objects.all(), required=False)
@@ -48,25 +49,52 @@ class ProductCreateForm(forms.ModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        
+        # Handle category
+        if new_category := self.cleaned_data.get('new_category'):
+            # Get or create the category as part of the same transaction
+            instance.category, _ = Category.objects.get_or_create(
+                name=new_category, 
+                defaults={'slug': slugify(new_category)}
+            )
+            
+        # Generate slug for the product
         instance.slug = slugify(instance.name)
         
-        if new_category := self.cleaned_data.get('new_category'):
-            instance.category, _ = Category.objects.get_or_create(name=new_category, defaults={'slug': slugify(new_category)})
-        
-        # Update existing product or create a new one
-        existing_product = Product.objects.filter(name=instance.name, category=instance.category).first()
-        if existing_product:
-            existing_product.quantity += instance.quantity
-            for field in ['regular_price', 'bulk_price', 'minimum_bulk_quantity', 'restock_level', 'available']:
-                setattr(existing_product, field, getattr(instance, field))
-            if commit:
-                existing_product.save()
-            return existing_product
-        
-        if commit:
-            instance.save()
-        return instance
-
+        # Using a single approach to handle duplicates - find or create
+        # This leverages the database constraints rather than explicit locking
+        try:
+            existing_product = None
+            if instance.category:
+                existing_product = Product.objects.filter(
+                    name=instance.name,
+                    category=instance.category
+                ).first()
+                
+            if existing_product:
+                # Update existing product
+                old_quantity = existing_product.quantity
+                for field in self.Meta.fields:
+                    if field != 'quantity':  # Skip quantity as we'll handle it specially
+                        setattr(existing_product, field, getattr(instance, field))
+                
+                # Add the new quantity to the existing quantity
+                existing_product.quantity = old_quantity + instance.quantity
+                
+                # Mark this as an update operation
+                existing_product._updated = True
+                
+                if commit:
+                    existing_product.save(form_edit=True)
+                return existing_product
+            else:
+                # Create new product
+                if commit:
+                    instance.save(form_edit=True)
+                return instance
+        except Exception as e:
+            # Let the view handle this exception
+            raise
             
 class SaleForm(forms.ModelForm):
     class Meta:
@@ -103,28 +131,54 @@ class SaleItemForm(forms.ModelForm):
         product = self.cleaned_data.get('product')
         
         if product and quantity:
-            if quantity > product.quantity:
-                raise forms.ValidationError("Not enough products in stock.")
+            if quantity <= 0:
+                raise forms.ValidationError("Quantity must be greater than zero.")
+            # Don't check against product.quantity here - we'll do it at save time
             if self.cleaned_data.get('sale_type') == 'bulk' and quantity < product.minimum_bulk_quantity:
                 raise forms.ValidationError(
                     f"Minimum {product.minimum_bulk_quantity} items required for bulk purchase."
                 )
         return quantity
 
+    @transaction.atomic
     def save(self, commit=True):
         """
-        Override save method to update product stock.
+        Override save method to update product stock with proper locking.
         """
         sale_item = super().save(commit=False)
         
-        # Reduce stock only when a new SaleItem is created
-        if commit:
-            sale_item.product.quantity -= sale_item.quantity
-            sale_item.product.save()
+        # Only process new sale items, not updates
+        if not sale_item.pk and commit:
+            # Lock the product for update to prevent race conditions
+            try:
+                # Get the latest product data with a lock
+                product = Product.objects.select_for_update().get(pk=sale_item.product.pk)
+                
+                # Verify again that there's enough stock
+                if product.quantity < sale_item.quantity:
+                    raise ValidationError(f"Not enough stock for {product.name}. Available: {product.quantity}")
+                
+                # Set the correct price based on sale type
+                if not sale_item.price_per_unit:
+                    sale_item.price_per_unit = product.bulk_price if sale_item.sale_type == 'bulk' else product.regular_price
+                
+                # Use the product's update_quantity method to safely reduce stock
+                product.update_quantity(-sale_item.quantity)
+                
+                # Save the sale item
+                sale_item.save()
+                
+                # Update the sale's total
+                if sale_item.sale:
+                    sale_item.sale.update_total_amount()
+                
+            except Product.DoesNotExist:
+                raise ValidationError("The selected product is no longer available.")
+            
+        elif commit:
             sale_item.save()
-        
+            
         return sale_item
-
 
 SaleItemFormSet = inlineformset_factory(Sale, SaleItem, form=SaleItemForm, extra=1, can_delete=True)
 

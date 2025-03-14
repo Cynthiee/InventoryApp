@@ -42,6 +42,9 @@ class Product(models.Model):
             models.Index(fields=['name']),
             models.Index(fields=['-created']),
         ]
+        constraints = [
+            models.UniqueConstraint(fields=['category', 'name'], name='unique_product_per_category')
+        ]
 
     def __str__(self):
         return self.name

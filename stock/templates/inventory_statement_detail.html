@@ -29,7 +29,7 @@
                     <a href="{% url 'export_inventory_statement_pdf' statement_id=statement.id %}" class="btn btn-danger">
                         <i class="fas fa-file-pdf"></i> Export PDF
                     </a>
-                    <a href="{% url 'regenerate_inventory_statement' statement_id=statement.id %}" class="btn btn-warning">
+                    <a href="{% url 'regenerate_inventory_statement' statement_id=statement.id %}?confirm=yes" class="btn btn-warning">
                         <i class="fas fa-sync-alt"></i> Regenerate
                     </a>
                     <a href="{% url 'inventory_statement_list' %}" class="btn btn-secondary">
@@ -39,35 +39,44 @@
             </div>
         </div>
     </div>
-    
-    <!-- Summary Section -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card bg-primary text-black">
-                <div class="card-body">
-                    <h5 class="card-title">Total Income</h5>
-                    <h3 class="card-text">₦{{ summary_totals.total_income|floatformat:2 }}</h3>
-                </div>
-            </div>
+        <!-- Summary Cards in a Row -->
+    <div class="flex flex-row items-center gap-4">
+        <div class="w-72 bg-gray-500 text-white shadow-md rounded-lg flex flex-col items-center justify-center p-6">
+            <h6 class="text-lg font-semibold m-2">Total Income </h6>
+            <h4 class="text-2xl font-bold">₦{{ summary_totals.total_income|floatformat:2 }}</h4>
         </div>
-        <div class="col-md-4">
-            <div class="card bg-success text-black">
-                <div class="card-body">
-                    <h5 class="card-title">Products Sold</h5>
-                    <h3 class="card-text">{{ summary_totals.total_products_sold }}</h3>
-                </div>
-            </div>
+        <div class="w-72 bg-gray-500 text-white shadow-md rounded-lg flex flex-col items-center justify-center p-6">
+            <h6 class="text-lg font-semibold m-2">Products Sold  </h6>
+            <h4 class="text-2xl font-bold "> {{ summary_totals.total_products_sold }}</h4>
         </div>
-        <div class="col-md-4">
-            <div class="card bg-info text-black">
-                <div class="card-body">
-                    <h5 class="card-title">Products in Stock</h5>
-                    <h3 class="card-text">{{ summary_totals.total_products_in_stock }}</h3>
-                </div>
-            </div>
+        <div class="w-72 bg-gray-500 text-white shadow-md rounded-lg flex flex-col items-center justify-center p-6">
+            <h6 class="text-lg font-semibold m-2">Products in Stock </h6>
+            <h4 class="text-2xl font-bold"> {{ summary_totals.total_products_in_stock }}</h4>
         </div>
     </div>
-    
+
+    <!-- Filter Buttons -->
+    <div class="my-4">
+        <h5 class="text-dark mb-3">Filter Inventory Items:</h5>
+        <div class="btn-group" role="group">
+            <a href="?filter=sold" class="btn btn-outline-dark {% if active_filter == 'sold' %}active{% endif %}">
+                Sold Products
+            </a>
+            <a href="?filter=no_sales" class="btn btn-outline-dark {% if active_filter == 'no_sales' %}active{% endif %}">
+                Products Not Sold
+            </a>
+            <a href="?filter=restock" class="btn btn-outline-dark {% if active_filter == 'restock' %}active{% endif %}">
+                Products Needing Restock
+            </a>
+            <a href="?filter=low_stock" class="btn btn-outline-dark {% if active_filter == 'low_stock' %}active{% endif %}">
+                Low Stock Products
+            </a>
+            <a href="?" class="btn btn-outline-dark {% if not active_filter %}active{% endif %}">
+                Show All
+            </a>
+        </div>
+    </div>
+
     <!-- Inventory Items Table -->
     <div class="card mb-4">
         <div class="card-header bg-dark text-black">
@@ -92,8 +101,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for form in formset %}
-                            {% with item=form.instance %}
+                            {% for form, item in form_item_pairs %}
                             <tr {% if item.remarks == 'Restock needed' %}class="table-warning"{% elif item.remarks == 'Variance detected' %}class="table-danger"{% endif %}>
                                 <td class="text-dark">{{ item.product.id }}</td>
                                 <td class="text-dark">{{ item.product.name }}</td>
@@ -114,10 +122,9 @@
                                     </span>
                                 </td>
                             </tr>
-                            {% endwith %}
                             {% empty %}
                             <tr>
-                                <td colspan="8" class="text-center text-dark">No inventory items found</td>
+                                <td colspan="8" class="text-center text-dark">No inventory items found for the selected filter</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -144,104 +151,5 @@
             </form>
         </div>
     </div>
-
-    <!-- Filter and Search Section -->
-    <div class="card mb-4">
-        <div class="card-header bg-secondary text-white">
-            <h3 class="mb-0">Filter Options</h3>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="showLowStock">
-                        <label class="form-check-label text-dark" for="showLowStock">
-                            Show only items needing restock
-                        </label>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="showVariance">
-                        <label class="form-check-label text-dark" for="showVariance">
-                            Show only items with variance
-                        </label>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="searchProduct" placeholder="Search products...">
-                        <button class="btn btn-outline-secondary" type="button" id="searchButton">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
-{% endblock %}
-
-{% block extrajs %}
-<script>
-    $(document).ready(function() {
-        // Filter functions
-        $('#showLowStock').change(function() {
-            if ($(this).is(':checked')) {
-                $('tbody tr').hide();
-                $('tbody tr.table-warning').show();
-                $('#showVariance').prop('checked', false);
-            } else {
-                $('tbody tr').show();
-            }
-        });
-        
-        $('#showVariance').change(function() {
-            if ($(this).is(':checked')) {
-                $('tbody tr').hide();
-                $('tbody tr.table-danger').show();
-                $('#showLowStock').prop('checked', false);
-            } else {
-                $('tbody tr').show();
-            }
-        });
-        
-        // Search functionality
-        $('#searchButton').click(function() {
-            let searchText = $('#searchProduct').val().toLowerCase();
-            if (searchText.length > 0) {
-                $('tbody tr').hide();
-                $('tbody tr').each(function() {
-                    let productName = $(this).find('td:nth-child(2)').text().toLowerCase();
-                    if (productName.includes(searchText)) {
-                        $(this).show();
-                    }
-                });
-            } else {
-                $('tbody tr').show();
-            }
-        });
-        
-        // Reset filters on reset button click
-        $('#resetFilters').click(function() {
-            $('#showLowStock, #showVariance').prop('checked', false);
-            $('#searchProduct').val('');
-            $('tbody tr').show();
-        });
-        
-        // Auto-calculate closing stock when received stock is changed
-        $('.received-stock-input').on('change', function() {
-            let row = $(this).closest('tr');
-            let openingStock = parseInt(row.find('td:nth-child(3)').text());
-            let receivedStock = parseInt($(this).val() || 0);
-            let invoicedStock = parseInt(row.find('td:nth-child(5)').text());
-            
-            // Calculate new closing stock
-            let closingStock = openingStock + receivedStock - invoicedStock;
-            
-            // Update display (not the actual data - that will happen on form submit)
-            row.find('td:nth-child(6)').text(closingStock);
-        });
-    });
-</script>
 {% endblock %}

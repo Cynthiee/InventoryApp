@@ -2,11 +2,12 @@ import json
 from arrow import now
 from django.template.loader import render_to_string
 from django.shortcuts import render, redirect, get_object_or_404
-from django.db import transaction
-from django.db.models import Q, Sum
+from django.db import IntegrityError, transaction
+from django.db.models import Q, Sum, F
 from django.http import HttpResponse
 from django.contrib import messages
 from django.core.serializers.json import DjangoJSONEncoder
+from django.urls import reverse
 from xhtml2pdf import pisa
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -44,9 +45,6 @@ def home(request):
             'notes': 'Automatically generated daily statement'
         }
     )
-
-    # There's also an issue with report_data - your model doesn't have this field
-    # Instead, you should create/update InventoryStatementItems if needed
     
     # Call your existing method to generate statement items
     if created:
@@ -105,12 +103,20 @@ def product_create(request):
     form = ProductCreateForm(request.POST or None)
     
     if form.is_valid():
-        with transaction.atomic():
-            product = form.save()
-            messages.success(request, f'Product "{product.name}" {"updated" if product.pk else "added"} successfully!')
-            return redirect('product_list')
+        try:
+            with transaction.atomic():
+                product = form.save()
+                messages.success(request, f'Product "{product.name}" {"updated" if getattr(product, "_updated", False) else "added"} successfully!')
+                return redirect('product_list')
+        except Exception as e:
+            # Don't attempt any new queries here
+            messages.error(request, f"Unable to save product: {str(e)}")
+            # Create a new form instance rather than reusing the current one
+            form = ProductCreateForm(request.POST)
 
     return render(request, 'product_form.html', {'title': 'Add Product', 'form': form})
+
+
 
 
 def product_list(request):
@@ -250,8 +256,6 @@ def sale_create(request):
     
     if request.method == 'POST':
         sale_form = SaleForm(request.POST)
-        
-        # Create a formset with the POST data
         sale_item_formset = SaleItemFormSet(request.POST)
         
         if sale_form.is_valid() and sale_item_formset.is_valid():
@@ -264,6 +268,7 @@ def sale_create(request):
                     if request.user.is_authenticated:
                         sale.user = request.user
                     
+                    # Save the sale to generate a primary key
                     sale.save()
                     
                     # Process each item in the formset
@@ -276,31 +281,47 @@ def sale_create(request):
                         if form.cleaned_data.get('DELETE', False):
                             continue
                         
-                        # Get the product and check stock
+                        # Get the product and quantity
                         product = form.cleaned_data.get('product')
                         quantity = form.cleaned_data.get('quantity', 0)
-                        sale_type = form.cleaned_data.get('sale_type', 'regular')
                         
                         # Skip if no product or quantity
                         if not product or not quantity:
                             continue
                             
-                        # Important: Create the SaleItem but DON'T save it yet
+                        # Lock the product row to prevent race conditions
+                        product = Product.objects.select_for_update().get(pk=product.pk)
+                        
+                        # Verify stock availability
+                        if product.quantity < quantity:
+                            raise ValidationError(
+                                f"Not enough stock for {product.name}. Available: {product.quantity}"
+                            )
+                        
+                        # Create the SaleItem but don't save it yet
                         sale_item = form.save(commit=False)
                         sale_item.sale = sale
                         
-                        # Let the SaleItem.save() method handle the stock update
-                        # This prevents double stock reduction
+                        # Set the price based on the sale type
+                        sale_type = form.cleaned_data.get('sale_type', 'regular')
+                        sale_item.price_per_unit = (
+                            product.bulk_price if sale_type == 'bulk' else product.regular_price
+                        )
+                        
+                        # Save the SaleItem, which will trigger the stock update
                         sale_item.save()
                     
-                    # The sale.update_total_amount() is called by each SaleItem.save()
-                    # so we don't need to call it again
+                    # Update the sale's total amount
+                    sale.update_total_amount()
                     
                     messages.success(request, 'Sale recorded successfully!')
                     return redirect('sale_detail', sale_id=sale.id)
                     
             except ValidationError as e:
                 messages.error(request, str(e))
+            except Exception as e:
+                # Handle unexpected errors gracefully
+                messages.error(request, f"An error occurred: {str(e)}")
         else:
             # Form validation errors
             errors = []
@@ -540,23 +561,47 @@ def inventory_statement_detail(request, statement_id):
     """View to display a detailed inventory statement."""
     statement = get_object_or_404(InventoryStatement, id=statement_id)
     
-    # Update the inventory statement with the latest data
-    statement.generate_statement_items()
+    # Check if items need to be generated
+    if not statement.items.exists():
+        statement.generate_statement_items()
     
-    items = statement.items.all()
+    # Get all items first (used for the form)
+    all_items = statement.items.all()
     
-    # Handle manual update of received stock
+    # Get filter type from query parameters
+    filter_type = request.GET.get('filter')
+    
+    # Create a filtered queryset for display
+    if filter_type == 'sold':
+        display_items = all_items.filter(invoiced_stock__gt=0)  # Products sold
+    elif filter_type == 'no_sales':
+        display_items = all_items.filter(invoiced_stock=0)  # Products with no sales
+    elif filter_type == 'restock':
+        display_items = all_items.filter(remarks='Restock needed')  # Products needing restock
+    elif filter_type == 'low_stock':
+        display_items = all_items.filter(closing_stock__lte=10)  # Products with low stock
+    else:
+        # If no valid filter is provided, show all items
+        display_items = all_items
+        filter_type = None  # Reset filter_type to None for template display
+    
+    # Handle form submission for updating received stock
     if request.method == 'POST':
         formset = InventoryStatementItemFormSet(request.POST, instance=statement)
         if formset.is_valid():
             formset.save()
             messages.success(request, 'Inventory statement updated successfully.')
-            return redirect('inventory_statement_detail', statement_id=statement.id)
+            
+            # Preserve filter parameter in redirect
+            redirect_url = reverse('inventory_statement_detail', kwargs={'statement_id': statement.id})
+            if filter_type:
+                redirect_url += f'?filter={filter_type}'
+            return redirect(redirect_url)
     else:
         formset = InventoryStatementItemFormSet(instance=statement)
     
-    # Calculate totals for inventory items
-    item_totals = items.aggregate(
+    # Calculate totals for the filtered inventory items
+    item_totals = display_items.aggregate(
         total_opening=Sum('opening_stock'),
         total_received=Sum('received_stock'),
         total_invoiced=Sum('invoiced_stock'),
@@ -571,13 +616,24 @@ def inventory_statement_detail(request, statement_id):
         'total_products_in_stock': statement.total_products_in_stock
     }
     
+    # Create a list of form/item pairs for the template to iterate over
+    form_item_pairs = []
+    
+    # Match formset forms with display items
+    item_ids = [item.id for item in display_items]
+    for form in formset:
+        # Only include forms for items that should be displayed
+        if form.instance.id in item_ids:
+            form_item_pairs.append((form, form.instance))
+    
     return render(request, 'inventory_statement_detail.html', {
         'statement': statement,
-        'items': items,
-        'formset': formset,
+        'form_item_pairs': form_item_pairs,  # This is what the template should iterate over
+        'formset': formset,  # Still need this for the management form
         'item_totals': item_totals,
         'summary_totals': summary_totals,
-        'title': f'Inventory Statement: {statement.date}'
+        'title': f'Inventory Statement: {statement.date}',
+        'active_filter': filter_type
     })
 
 # @login_required
@@ -585,7 +641,7 @@ def regenerate_inventory_statement(request, statement_id):
     """Regenerate inventory statement items"""
     statement = get_object_or_404(InventoryStatement, id=statement_id)
     
-    if request.method == 'POST':
+    if request.method == 'POST' or request.GET.get('confirm') == 'yes':
         # Regenerate all statement items
         item_count = statement.generate_statement_items()
         messages.success(request, f'Inventory statement regenerated with {item_count} items')
