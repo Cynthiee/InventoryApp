@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import dj_database_url
 import socket
@@ -84,25 +85,20 @@ WSGI_APPLICATION = 'inventory.wsgi.application'
 
 # Function to check if we're running on Render
 def is_running_on_render():
-    # This checks if the hostname matches Render's pattern
-    # You might need to adjust this based on actual Render hostnames
-    try:
-        hostname = socket.gethostname()
-        return 'render' in hostname.lower()
-    except:
-        return False
+    # Check for the RENDER environment variable
+    return os.getenv('RENDER') is not None
 
 # Configure databases based on environment
 if is_running_on_render():
-    # On Render - use remote PostgreSQL
+    print("Running on Render - using PostgreSQL")
     DATABASES = {
         'default': dj_database_url.config(
-            default='postgresql://modetex:GR0ZxsKfpP9mToBr6Z8UrpmcSPllowNh@dpg-cvaaft3qf0us73ct2f00-a/modetex_xe5t',
+            default=os.getenv('DATABASE_URL'),
             conn_max_age=600
         )
     }
 else:
-    # Local development - use SQLite
+    print("Running locally - using SQLite")
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
