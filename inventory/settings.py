@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import dj_database_url
-import socket
+
 
 
 
@@ -24,9 +24,7 @@ ALLOWED_HOSTS = ["modetex-store.onrender.com", "localhost", "127.0.0.1"]
 
 
 
-# CSRF_TRUSTED_ORIGINS = [
-#     "https://modetexstore.onrender.com"
-# ]
+
 
 # Application definition
 
@@ -83,10 +81,26 @@ WSGI_APPLICATION = 'inventory.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'modetex_xe5t',
+        'USER': 'modetex',
+        'PASSWORD': 'GR0ZxsKfpP9mToBr6Z8UrpmcSPllowNh',
+        'HOST': 'dpg-cvaaft3qf0us73ct2f00-a',
+        'PORT': '5432',
+    }
+}
+
+
 # Function to check if we're running on Render
 def is_running_on_render():
-    # Check for the RENDER environment variable
-    return os.getenv('RENDER') is not None
+    # return os.getenv('RENDER') is not None
+    return True
+
+# Debug: Print environment variables
+print("RENDER environment variable:", os.getenv('RENDER'))
+print("DATABASE_URL environment variable:", os.getenv('DATABASE_URL'))
 
 # Configure databases based on environment
 if is_running_on_render():
