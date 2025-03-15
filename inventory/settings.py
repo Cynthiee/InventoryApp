@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import dj_database_url
+from decouple import config
 
 
 
@@ -15,12 +16,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 
 
-SECRET_KEY = 'django-insecure-50)_a4$5n)*)vkw30rf2)%kn2mwf1tp^thlxo*z0knr-0up$z4'
+SECRET_KEY = config("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 
-DEBUG = False
+DEBUG = config("DEBUG", cast=bool)
 
-ALLOWED_HOSTS = ["modetex-store.onrender.com", "localhost", "127.0.0.1"]
+ALLOWED_HOSTS = config("ALLOWED_HOSTS").split(",")
 
 
 
@@ -82,43 +83,13 @@ WSGI_APPLICATION = 'inventory.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'modetex_xe5t',
-        'USER': 'modetex',
-        'PASSWORD': 'GR0ZxsKfpP9mToBr6Z8UrpmcSPllowNh',
-        'HOST': 'dpg-cvaaft3qf0us73ct2f00-a',
-        'PORT': '5432',
-    }
-}
-
-
-# Function to check if we're running on Render
-def is_running_on_render():
-    # return os.getenv('RENDER') is not None
-    return True
-
-# Debug: Print environment variables
-print("RENDER environment variable:", os.getenv('RENDER'))
-print("DATABASE_URL environment variable:", os.getenv('DATABASE_URL'))
-
-# Configure databases based on environment
-if is_running_on_render():
-    print("Running on Render - using PostgreSQL")
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=os.getenv('DATABASE_URL'),
-            conn_max_age=600
-        )
-    }
-else:
-    print("Running locally - using SQLite")
-    DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+
+DATABASES['default'] = dj_database_url.parse(config("DATABASE_URL"))
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
