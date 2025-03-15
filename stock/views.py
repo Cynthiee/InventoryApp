@@ -263,6 +263,9 @@ def sale_create(request):
                     # Create the sale
                     sale = sale_form.save(commit=False)
                     
+                    # Set the seller_name from the form data
+                    sale.seller_name = sale_form.cleaned_data['seller_name']
+                    
                     # Set the user if authenticated (optional)
                     if request.user.is_authenticated:
                         sale.user = request.user

@@ -8,7 +8,8 @@
 
     <div class="mb-4">
         <p><strong>Sale ID:</strong> {{ sale.id }}</p>
-        <p><strong>Customer:</strong> {{ sale.user.username }}</p>
+        <p><strong>Seller:</strong> {{ sale.seller_name }}</p>
+        <p><strong>User:</strong> {% if sale.user %}{{ sale.user.username }}{% else %}N/A{% endif %}</p>
         <p><strong>Date:</strong> {{ sale.sale_date|date:"Y-m-d H:i" }}</p>
     </div>
 
