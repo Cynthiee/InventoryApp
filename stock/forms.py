@@ -42,8 +42,8 @@ class ProductCreateForm(forms.ModelForm):
         if cleaned_data.get('bulk_price') > cleaned_data.get('regular_price'):
             raise forms.ValidationError('Bulk price cannot be greater than regular price.')
         
-        if cleaned_data.get('minimum_bulk_quantity', 12) < 12:
-            raise forms.ValidationError('Minimum bulk quantity must be at least 12.')
+        if cleaned_data.get('minimum_bulk_quantity', 0) < 0:
+            raise forms.ValidationError('Minimum bulk quantity cannot be negative.')
 
         return cleaned_data
 

@@ -45,19 +45,11 @@
         .table th {
             background-color: #f4f4f4;
         }
-        .bulk-row {
-            background-color: #f0f8ff;
-        }
         .total {
             text-align: right;
             font-weight: bold;
             font-size: 16px;
             margin-top: 10px;
-        }
-        .sale-type {
-            font-size: 12px;
-            font-style: italic;
-            color: #555;
         }
         .footer {
             margin-top: 20px;
@@ -83,22 +75,16 @@
                 <tr>
                     <th>Product</th>
                     <th>Qty</th>
-                    <th>Price Type</th>
-                    <th>Reg. Price (₦)</th>
-                    <th>Bulk Price (₦)</th>
-                    <th>Applied (₦)</th>
+                    <th>Price (₦)</th>
                     <th>Total (₦)</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in sale.items.all %}
-                <tr {% if item.sale_type == 'bulk' %}class="bulk-row"{% endif %}>
+                <tr>
                     <td>{{ item.product.name }}</td>
                     <td>{{ item.quantity }}</td>
-                    <td>{{ item.sale_type|title }}</td>
-                    <td>{{ item.product.regular_price|floatformat:2 }}</td>
-                    <td>{{ item.product.bulk_price|floatformat:2 }}</td>
-                    <td><strong>{{ item.price_per_unit|floatformat:2 }}</strong></td>
+                    <td>{{ item.price_per_unit|floatformat:2 }}</td>
                     <td>{{ item.total_price|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}

@@ -28,7 +28,7 @@ class Product(models.Model):
     regular_price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(1)])
     bulk_price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(1)])
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(0)])
-    minimum_bulk_quantity = models.IntegerField(default=12, help_text="Minimum quantity required for bulk pricing.")
+    minimum_bulk_quantity = models.IntegerField(default=0, help_text="Minimum quantity required for bulk pricing.")
     restock_level = models.IntegerField(validators=[MinValueValidator(0)], default=0, help_text="Minimum quantity before restock is needed.")
     needs_restock = models.BooleanField(default=False)
     available = models.BooleanField(default=True)
