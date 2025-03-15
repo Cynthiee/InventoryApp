@@ -82,6 +82,7 @@ class Product(models.Model):
         self.refresh_from_db()
 
 class Sale(models.Model):
+    seller_name = models.CharField(max_length=200,null=True, blank=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, editable=False, default=0)
     sale_date = models.DateTimeField(auto_now_add=True)

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <title>Receipt #{{ sale.id }}</title>
     <style>
         body {
@@ -67,7 +67,8 @@
 
         <div class="info">
             <p><strong>Date:</strong> {{ sale.sale_date|date:"Y-m-d H:i" }}</p>
-            <p><strong>Customer:</strong> {% if sale.user %}{{ sale.user.username }}{% else %}Walk-in Customer{% endif %}</p>
+            <p><strong>Seller:</strong> {{ sale.seller_name }}</p>
+            <p><strong>User:</strong> {% if sale.user %}{{ sale.user.username }}{% else %}N/A{% endif %}</p>
         </div>
 
         <table class="table">

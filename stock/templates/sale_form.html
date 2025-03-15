@@ -7,11 +7,16 @@
     <form method="post" id="saleForm" class="space-y-4">
         {% csrf_token %}
 
+        <!-- Seller Name Field -->
         <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700">{{ sale_form.user.label_tag }}</label>
-            {{ sale_form.user }}
+            <label class="block text-sm font-medium text-gray-700" for="seller_name">Seller Name:</label>
+            {{ sale_form.seller_name }}
+            {% if sale_form.seller_name.errors %}
+                <div class="text-red-500 text-sm mt-1">{{ sale_form.seller_name.errors }}</div>
+            {% endif %}
         </div>
 
+        <!-- Sale Items Table -->
         <div class="overflow-x-auto">
             <table class="min-w-full bg-white border border-gray-300 rounded-lg">
                 <thead class="bg-gray-100">
@@ -29,7 +34,12 @@
                     {% for form in sale_item_formset %}
                     <tr class="sale-item border-t" data-form-index="{{ forloop.counter0 }}">
                         <td class="py-2 px-4">
-                            {{ form.product }}
+                            <div class="product-search-container">
+                                <input type="text" class="product-search form-control w-full border-gray-300 rounded-md shadow-sm" placeholder="Search product...">
+                                <div class="product-search-results hidden absolute z-10 w-64 mt-1 bg-white shadow-lg rounded-md border border-gray-300 max-h-60 overflow-y-auto"></div>
+                                {{ form.product.as_hidden }}
+                                <div class="selected-product-name text-sm mt-1 font-medium"></div>
+                            </div>
                             {{ form.id }}
                         </td>
                         <td class="py-2 px-4">{{ form.sale_type }}</td>
@@ -47,17 +57,17 @@
             </table>
         </div>
 
+        <!-- Add More Button -->
         <button type="button" id="addItem" class="bg-blue-500 text-white px-4 py-2 rounded mt-3">+ Add More</button>
 
+        <!-- Final Total -->
         <div class="mt-4 text-lg font-semibold">
             Final Total: ₦<span id="finalTotal">0.00</span>
         </div>
 
+        <!-- Form Actions -->
         <div class="mt-6 flex justify-between">
-            <!-- Cancel Button -->
             <a href="{% url 'sale_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded">Cancel</a>
-        
-            <!-- Save Sale Button -->
             <button type="submit" class="bg-green-500 text-white px-6 py-2 rounded block">Save Sale</button>
         </div>
     </form>
@@ -77,6 +87,18 @@
         {% endfor %}
     };
 
+    // Create a searchable array of products
+    const productArray = Object.entries(productData).map(([id, data]) => {
+        return {
+            id: id,
+            name: data.name,
+            regular_price: data.regular_price,
+            bulk_price: data.bulk_price,
+            quantity: data.quantity,
+            minimum_bulk_quantity: data.minimum_bulk_quantity
+        };
+    });
+
     document.addEventListener("DOMContentLoaded", function () {
         const formsetPrefix = "{{ sale_item_formset.prefix }}";
         const tableBody = document.querySelector("#saleItemsTable");
@@ -92,23 +114,81 @@
             totalFormsInput.value = formRows.length;
         }
         
+        function initProductSearch(row) {
+            const searchInput = row.querySelector(".product-search");
+            const resultsContainer = row.querySelector(".product-search-results");
+            const hiddenInput = row.querySelector(`input[name$='-product']`);
+            const selectedProductName = row.querySelector(".selected-product-name");
+            
+            searchInput.addEventListener("input", function() {
+                const searchTerm = this.value.toLowerCase();
+                
+                if (searchTerm.length < 2) {
+                    resultsContainer.classList.add("hidden");
+                    return;
+                }
+                
+                // Filter products based on search term
+                const filteredProducts = productArray.filter(product => 
+                    product.name.toLowerCase().includes(searchTerm)
+                );
+                
+                // Display search results
+                resultsContainer.innerHTML = "";
+                if (filteredProducts.length > 0) {
+                    filteredProducts.forEach(product => {
+                        const resultItem = document.createElement("div");
+                        resultItem.className = "p-2 hover:bg-gray-100 cursor-pointer";
+                        resultItem.textContent = `${product.name} - ₦${product.regular_price.toFixed(2)}`;
+                        resultItem.dataset.productId = product.id;
+                        
+                        resultItem.addEventListener("click", function() {
+                            hiddenInput.value = product.id;
+                            searchInput.value = product.name;
+                            selectedProductName.textContent = `${product.name} (Available: ${product.quantity})`;
+                            resultsContainer.classList.add("hidden");
+                            
+                            // Trigger recalculation
+                            const event = new Event("change");
+                            hiddenInput.dispatchEvent(event);
+                        });
+                        
+                        resultsContainer.appendChild(resultItem);
+                    });
+                    
+                    resultsContainer.classList.remove("hidden");
+                } else {
+                    resultsContainer.innerHTML = "<div class='p-2 text-gray-500'>No products found</div>";
+                    resultsContainer.classList.remove("hidden");
+                }
+            });
+            
+            // Hide results when clicking outside
+            document.addEventListener("click", function(e) {
+                if (!searchInput.contains(e.target) && !resultsContainer.contains(e.target)) {
+                    resultsContainer.classList.add("hidden");
+                }
+            });
+        }
+        
         function updatePrices() {
             let finalTotal = 0;
             document.querySelectorAll(".sale-item").forEach((row) => {
-                const productSelect = row.querySelector(`select[name$='-product']`);
+                const productInput = row.querySelector(`input[name$='-product']`);
                 const saleTypeSelect = row.querySelector(`select[name$='-sale_type']`);
                 const quantityInput = row.querySelector(`input[name$='-quantity']`);
                 const priceCell = row.querySelector(".price");
                 const totalCell = row.querySelector(".total");
+                const selectedProductName = row.querySelector(".selected-product-name");
     
                 function recalculate() {
-                    if (!productSelect.value) {
+                    if (!productInput.value) {
                         priceCell.textContent = "0.00";
                         totalCell.textContent = "0.00";
                         return;
                     }
                     
-                    const productId = productSelect.value;
+                    const productId = productInput.value;
                     const product = productData[productId];
                     
                     if (!product) {
@@ -116,6 +196,9 @@
                         totalCell.textContent = "0.00";
                         return;
                     }
+                    
+                    // Update the selected product display
+                    selectedProductName.textContent = `${product.name} (Available: ${product.quantity})`;
                     
                     const saleType = saleTypeSelect.value;
                     const pricePerUnit = saleType === "bulk" ? product.bulk_price : product.regular_price;
@@ -138,7 +221,7 @@
                     updateFinalTotal();
                 }
     
-                productSelect.addEventListener("change", recalculate);
+                productInput.addEventListener("change", recalculate);
                 saleTypeSelect.addEventListener("change", recalculate);
                 quantityInput.addEventListener("input", recalculate);
     
@@ -155,6 +238,11 @@
             finalTotalElement.textContent = total.toFixed(2);
         }
     
+        // Initialize product search for initial rows
+        document.querySelectorAll(".sale-item").forEach(row => {
+            initProductSearch(row);
+        });
+        
         addItemBtn.addEventListener("click", function () {
             // Get the current form count
             const formCount = document.querySelectorAll(".sale-item").length;
@@ -192,6 +280,7 @@
             // Reset price and total cells
             newRow.querySelector(".price").textContent = "0.00";
             newRow.querySelector(".total").textContent = "0.00";
+            newRow.querySelector(".selected-product-name").textContent = "";
             
             // Add remove button if it doesn't exist
             if (!newRow.querySelector(".remove-item")) {
@@ -208,6 +297,9 @@
             
             // Update the form count
             updateFormCount();
+            
+            // Initialize search for the new row
+            initProductSearch(newRow);
             
             // Initialize event listeners for the new row
             updatePrices();
@@ -250,6 +342,26 @@
     
         // Initialize price calculations
         updatePrices();
+        
+        // Form submission handling
+        document.getElementById("saleForm").addEventListener("submit", function(e) {
+            // Check if at least one product is selected
+            const productInputs = document.querySelectorAll("input[name$='-product']");
+            let hasProducts = false;
+            
+            for (const input of productInputs) {
+                if (input.value) {
+                    hasProducts = true;
+                    break;
+                }
+            }
+            
+            if (!hasProducts) {
+                e.preventDefault();
+                alert("Please select at least one product.");
+                return;
+            }
+        });
     
         // Display Django Messages as a Popup Alert
         {% if messages %}

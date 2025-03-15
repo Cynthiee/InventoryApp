@@ -99,10 +99,15 @@ class ProductCreateForm(forms.ModelForm):
 class SaleForm(forms.ModelForm):
     class Meta:
         model = Sale
-        fields = ['user']
+        fields = ['seller_name']  # Use the new field
         widgets = {
-            'user': forms.Select(attrs={'class': 'form-control'}),
+            'seller_name': forms.TextInput(attrs={'class': 'form-control', 'id': 'seller_name'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['seller_name'].label = "Seller Name"
+        self.fields['seller_name'].required = True
 
 
 class SaleItemForm(forms.ModelForm):

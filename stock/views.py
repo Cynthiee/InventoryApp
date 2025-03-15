@@ -251,7 +251,6 @@ def product_delete(request, slug):
 # Sale Views
 def sale_create(request):
     """Create a new sale with multiple sale items."""
-    # Get all products with stock for JavaScript and the form
     products = Product.objects.filter(quantity__gt=0)
     
     if request.method == 'POST':
@@ -264,7 +263,7 @@ def sale_create(request):
                     # Create the sale
                     sale = sale_form.save(commit=False)
                     
-                    # Set the user if authenticated
+                    # Set the user if authenticated (optional)
                     if request.user.is_authenticated:
                         sale.user = request.user
                     
@@ -324,9 +323,11 @@ def sale_create(request):
                 messages.error(request, f"An error occurred: {str(e)}")
         else:
             # Form validation errors
-            errors = []
             if not sale_form.is_valid():
-                errors.append("Sale information has errors.")
+                errors = []
+                for field, field_errors in sale_form.errors.items():
+                    errors.append(f"{sale_form[field].label}: {', '.join(field_errors)}")
+                messages.error(request, "Sale information has errors: " + " ".join(errors))
             
             for i, form in enumerate(sale_item_formset):
                 if not form.is_valid():
@@ -351,7 +352,6 @@ def sale_create(request):
     }
     
     return render(request, 'sale_form.html', context)
-
 
 def sale_list(request):
     query = request.GET.get('q', '')
