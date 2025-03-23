@@ -15,7 +15,7 @@
                 <div class="text-red-500 text-sm mt-1">{{ sale_form.seller_name.errors }}</div>
             {% endif %}
         </div>
-
+        
         <!-- Sale Items Table -->
         <div class="overflow-x-auto">
             <table class="min-w-full bg-white border border-gray-300 rounded-lg">
@@ -81,23 +81,38 @@
                 "name": "{{ product.name }}",
                 "regular_price": {{ product.regular_price }},
                 "bulk_price": {{ product.bulk_price }},
+                "dozen_price": {{ product.dozen_price }},
                 "quantity": {{ product.quantity }},
-                "minimum_bulk_quantity": {{ product.minimum_bulk_quantity|default:1 }}
+                "minimum_bulk_quantity": {{ product.minimum_bulk_quantity|default:1 }},
+                "quantity_per_carton": {{ product.quantity_per_carton|default:0 }}
             }{% if not forloop.last %},{% endif %}
         {% endfor %}
     };
 
-    // Create a searchable array of products
+    // Create a searchable array with pre-processed lowercase names for faster search
     const productArray = Object.entries(productData).map(([id, data]) => {
         return {
             id: id,
             name: data.name,
+            nameLower: data.name.toLowerCase(), // Pre-process for faster search
             regular_price: data.regular_price,
             bulk_price: data.bulk_price,
+            dozen_price: data.dozen_price,
             quantity: data.quantity,
-            minimum_bulk_quantity: data.minimum_bulk_quantity
+            minimum_bulk_quantity: data.minimum_bulk_quantity,
+            quantity_per_carton: data.quantity_per_carton
         };
     });
+
+    // Debounce function to limit how often search executes
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), wait);
+        };
+    }
 
     document.addEventListener("DOMContentLoaded", function () {
         const formsetPrefix = "{{ sale_item_formset.prefix }}";
@@ -120,9 +135,8 @@
             const hiddenInput = row.querySelector(`input[name$='-product']`);
             const selectedProductName = row.querySelector(".selected-product-name");
             
-            searchInput.addEventListener("input", function() {
-                const searchTerm = this.value.toLowerCase();
-                
+            // Create a debounced search function (only executes 300ms after user stops typing)
+            const debouncedSearch = debounce(function(searchTerm) {
                 if (searchTerm.length < 2) {
                     resultsContainer.classList.add("hidden");
                     return;
@@ -130,13 +144,20 @@
                 
                 // Filter products based on search term
                 const filteredProducts = productArray.filter(product => 
-                    product.name.toLowerCase().includes(searchTerm)
+                    product.nameLower.includes(searchTerm)
                 );
                 
                 // Display search results
                 resultsContainer.innerHTML = "";
                 if (filteredProducts.length > 0) {
-                    filteredProducts.forEach(product => {
+                    // Limit to first 10 results for better performance
+                    const maxResults = Math.min(filteredProducts.length, 10);
+                    
+                    // Use document fragment for better performance
+                    const fragment = document.createDocumentFragment();
+                    
+                    for (let i = 0; i < maxResults; i++) {
+                        const product = filteredProducts[i];
                         const resultItem = document.createElement("div");
                         resultItem.className = "p-2 hover:bg-gray-100 cursor-pointer";
                         resultItem.textContent = `${product.name} - ₦${product.regular_price.toFixed(2)}`;
@@ -145,7 +166,12 @@
                         resultItem.addEventListener("click", function() {
                             hiddenInput.value = product.id;
                             searchInput.value = product.name;
-                            selectedProductName.textContent = `${product.name} (Available: ${product.quantity})`;
+                            
+                            // Include quantity per carton in the product display
+                            const cartonInfo = product.quantity_per_carton > 0 ? 
+                                ` (${product.quantity_per_carton} units per carton)` : '';
+                            selectedProductName.textContent = `${product.name} (Available: ${product.quantity})${cartonInfo}`;
+                            
                             resultsContainer.classList.add("hidden");
                             
                             // Trigger recalculation
@@ -153,14 +179,19 @@
                             hiddenInput.dispatchEvent(event);
                         });
                         
-                        resultsContainer.appendChild(resultItem);
-                    });
+                        fragment.appendChild(resultItem);
+                    }
                     
+                    resultsContainer.appendChild(fragment);
                     resultsContainer.classList.remove("hidden");
                 } else {
                     resultsContainer.innerHTML = "<div class='p-2 text-gray-500'>No products found</div>";
                     resultsContainer.classList.remove("hidden");
                 }
+            }, 300); // 300ms debounce delay
+            
+            searchInput.addEventListener("input", function() {
+                debouncedSearch(this.value.toLowerCase());
             });
             
             // Hide results when clicking outside
@@ -197,11 +228,24 @@
                         return;
                     }
                     
-                    // Update the selected product display
-                    selectedProductName.textContent = `${product.name} (Available: ${product.quantity})`;
+                    // Update the selected product display with quantity per carton
+                    const cartonInfo = product.quantity_per_carton > 0 ? 
+                        ` (${product.quantity_per_carton} units per carton)` : '';
+                    selectedProductName.textContent = `${product.name} (Available: ${product.quantity})${cartonInfo}`;
                     
                     const saleType = saleTypeSelect.value;
-                    const pricePerUnit = saleType === "bulk" ? product.bulk_price : product.regular_price;
+                    let pricePerUnit;
+                    switch (saleType) {
+                        case "bulk":
+                            pricePerUnit = product.bulk_price;
+                            break;
+                        case "dozen":
+                            pricePerUnit = product.dozen_price;
+                            break;
+                        default:
+                            pricePerUnit = product.regular_price;
+                    }
+                    
                     const quantity = parseInt(quantityInput.value) || 0;
                     
                     // Apply business rules

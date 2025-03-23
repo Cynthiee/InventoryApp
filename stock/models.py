@@ -27,7 +27,11 @@ class Product(models.Model):
     slug = models.SlugField(max_length=200)
     regular_price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(1)])
     bulk_price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(1)])
+    dozen_price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(1)], default=0,
+                                     help_text="Price when purchasing a dozen of this product.")
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(0)])
+    quantity_per_carton = models.PositiveIntegerField(default=0, 
+                                                     help_text="Number of items contained in one carton (constant).")
     minimum_bulk_quantity = models.IntegerField(default=0, help_text="Minimum quantity required for bulk pricing.")
     restock_level = models.IntegerField(validators=[MinValueValidator(0)], default=0, help_text="Minimum quantity before restock is needed.")
     needs_restock = models.BooleanField(default=False)
@@ -53,6 +57,8 @@ class Product(models.Model):
         from django.core.exceptions import ValidationError
         if self.bulk_price > self.regular_price:
             raise ValidationError("Bulk price cannot be greater than regular price.")
+        if self.dozen_price <= self.regular_price:
+            raise ValidationError("Dozen price must be greater than regular price.")
         
     def save(self, *args, form_edit=False, **kwargs):
         # Ensure quantity is a plain integer before comparison
@@ -79,7 +85,9 @@ class Product(models.Model):
         Product.objects.filter(pk=self.pk).update(needs_restock=needs_restock)
         
         # Refresh again to get the updated values
-        self.refresh_from_db()
+        self.refresh_from_db(fields=['quantity'])
+        return self.quantity
+
 
 class Sale(models.Model):
     seller_name = models.CharField(max_length=200,null=True, blank=False)
@@ -103,13 +111,14 @@ class SaleItem(models.Model):
     SALE_TYPE_CHOICES = [
         ('regular', 'Regular'),
         ('bulk', 'Bulk'),
+        ('dozen', 'Dozen'),
     ]
 
     sale = models.ForeignKey(Sale, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     sale_type = models.CharField(max_length=10, choices=SALE_TYPE_CHOICES, default='regular')
-    price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
+    price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)
 
     def clean(self):
         """Validate the sale item before saving."""
@@ -123,36 +132,10 @@ class SaleItem(models.Model):
         if self.quantity is None:
             raise ValidationError("Quantity cannot be empty.")
         
-        # Now it's safe to compare quantities
-        if self.product.quantity < self.quantity:
-            raise ValidationError(f"Not enough stock for {self.product.name}. Available: {self.product.quantity}")
-            
-        # This check is also now safer
+        # Validate based on sale type
         if self.sale_type == 'bulk' and self.quantity < self.product.minimum_bulk_quantity:
             raise ValidationError(f"Minimum {self.product.minimum_bulk_quantity} items required for bulk purchase.")
-
-    @transaction.atomic
-    def save(self, *args, **kwargs):
-        """Save the sale item and update product stock."""
-        # Set the correct price based on sale type
-        if not self.price_per_unit:
-            self.price_per_unit = self.product.bulk_price if self.sale_type == 'bulk' else self.product.regular_price
-        
-        # For new items (not updates), perform stock update
-        if not self.pk:  # This checks if it's a new item
-            self.clean()  # Validate before saving
-            
-            # Use the update_quantity method instead of direct F expression
-            self.product.update_quantity(-self.quantity)
-            
-            # No need to save the product again here, as update_quantity already did that
-        
-        # Save the sale item
-        super().save(*args, **kwargs)
-        
-        # Update the sale's total amount
-        self.sale.update_total_amount()
-
+    
     @property
     def total_price(self):
         """Calculate the total price for this item."""
@@ -172,7 +155,7 @@ class ProductStockUpdate(models.Model):
     def __str__(self):
         return f"{self.product.name} - {self.quantity_change} on {self.date}"
     
-# Inventory Statement
+
 class InventoryStatement(models.Model):
     """Daily inventory statement"""
     date = models.DateField(unique=True)
@@ -187,7 +170,6 @@ class InventoryStatement(models.Model):
         ordering = ['-date']
         verbose_name = 'Inventory Statement'
         verbose_name_plural = 'Inventory Statements'
-        # Ensure only one statement per day
         constraints = [
             models.UniqueConstraint(fields=['date'], name='unique_daily_statement')
         ]
@@ -229,11 +211,9 @@ class InventoryStatement(models.Model):
             ).aggregate(total_received=Sum('quantity_change'))['total_received'] or 0
             
             # Calculate opening stock
-            # Opening Stock = Closing Stock + Invoiced Stock - Received Stock
             opening_stock = closing_stock + invoiced_stock - received_stock
             
             # Calculate variance (difference between actual and calculated closing stock)
-            # In a real inventory system, you'd compare with a physical count
             variance = 0  # For now, we assume no variance
             
             # Determine remarks based on variance or stock levels
@@ -264,10 +244,10 @@ class InventoryStatementItem(models.Model):
     inventory_statement = models.ForeignKey(InventoryStatement, related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     opening_stock = models.PositiveIntegerField(default=0)
-    received_stock = models.PositiveIntegerField(default=0)  # Will be manually updated
+    received_stock = models.PositiveIntegerField(default=0)
     invoiced_stock = models.PositiveIntegerField(default=0)
     closing_stock = models.PositiveIntegerField(default=0)
-    variance = models.IntegerField(default=0)  # Can be negative
+    variance = models.IntegerField(default=0)
     remarks = models.CharField(max_length=100, blank=True, null=True)
     
     class Meta:

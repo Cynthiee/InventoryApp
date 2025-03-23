@@ -1,10 +1,9 @@
 from django import forms
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.forms import ValidationError, inlineformset_factory
 from .models import Category, Product, Sale, SaleItem, InventoryStatement, InventoryStatementItem
 from django.utils.text import slugify
 from django.utils import timezone
-from django.db import transaction
 
 class CategoryForm(forms.ModelForm):
     class Meta:
@@ -24,13 +23,16 @@ class CategoryForm(forms.ModelForm):
             instance.save()
         return instance
 
+
 class ProductCreateForm(forms.ModelForm):
     category = forms.ModelChoiceField(queryset=Category.objects.all(), required=False)
     new_category = forms.CharField(max_length=200, required=False)
 
     class Meta:
         model = Product
-        fields = ['category', 'name', 'regular_price', 'bulk_price', 'quantity', 'minimum_bulk_quantity', 'restock_level', 'available']
+        fields = ['category', 'name', 'regular_price', 'bulk_price', 'dozen_price', 
+                 'quantity', 'quantity_per_carton', 'minimum_bulk_quantity', 
+                 'restock_level', 'available']
 
     def clean(self):
         cleaned_data = super().clean()
@@ -41,9 +43,16 @@ class ProductCreateForm(forms.ModelForm):
         
         if cleaned_data.get('bulk_price') > cleaned_data.get('regular_price'):
             raise forms.ValidationError('Bulk price cannot be greater than regular price.')
+            
+        # CHANGE THIS CONDITION:
+        if cleaned_data.get('dozen_price') <= cleaned_data.get('regular_price'):
+            raise forms.ValidationError('Dozen price must be greater than regular price.')
         
         if cleaned_data.get('minimum_bulk_quantity', 0) < 0:
             raise forms.ValidationError('Minimum bulk quantity cannot be negative.')
+
+        if cleaned_data.get('quantity_per_carton', 0) < 0:
+            raise forms.ValidationError('Quantity per carton cannot be negative.')
 
         return cleaned_data
 
@@ -95,7 +104,8 @@ class ProductCreateForm(forms.ModelForm):
         except Exception as e:
             # Let the view handle this exception
             raise
-            
+
+
 class SaleForm(forms.ModelForm):
     class Meta:
         model = Sale
@@ -117,6 +127,7 @@ class SaleItemForm(forms.ModelForm):
         self.fields['product'].widget.attrs.update({
             'data-regular-price': lambda p: str(p.regular_price),
             'data-bulk-price': lambda p: str(p.bulk_price),
+            'data-dozen-price': lambda p: str(p.dozen_price),
         })
 
     class Meta:
@@ -165,7 +176,12 @@ class SaleItemForm(forms.ModelForm):
                 
                 # Set the correct price based on sale type
                 if not sale_item.price_per_unit:
-                    sale_item.price_per_unit = product.bulk_price if sale_item.sale_type == 'bulk' else product.regular_price
+                    if sale_item.sale_type == 'bulk':
+                        sale_item.price_per_unit = product.bulk_price
+                    elif sale_item.sale_type == 'dozen':
+                        sale_item.price_per_unit = product.dozen_price
+                    else:
+                        sale_item.price_per_unit = product.regular_price
                 
                 # Use the product's update_quantity method to safely reduce stock
                 product.update_quantity(-sale_item.quantity)
@@ -185,7 +201,9 @@ class SaleItemForm(forms.ModelForm):
             
         return sale_item
 
+
 SaleItemFormSet = inlineformset_factory(Sale, SaleItem, form=SaleItemForm, extra=1, can_delete=True)
+
 
 class SearchProductCategory(forms.Form):
     category = forms.ModelChoiceField(

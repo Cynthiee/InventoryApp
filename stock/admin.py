@@ -11,9 +11,9 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'regular_price', 'bulk_price', 'quantity', 'restock_level', 'minimum_bulk_quantity', 'needs_restock', 'created', 'updated')
+    list_display = ('name', 'category', 'regular_price', 'bulk_price', 'dozen_price', 'quantity', 'quantity_per_carton', 'restock_level', 'minimum_bulk_quantity', 'needs_restock', 'created', 'updated')
     list_filter = ('category', 'created', 'updated', 'needs_restock')
-    search_fields = ('name',)
+    search_fields = ('name', 'category__name')
     prepopulated_fields = {'slug': ('name',)}
     ordering = ('name',)
     readonly_fields = ('needs_restock',)
@@ -23,8 +23,9 @@ class ProductAdmin(admin.ModelAdmin):
 class SaleAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'total_amount', 'sale_date', 'created', 'updated')
     list_filter = ('sale_date', 'created', 'updated')
-    search_fields = ('user__username',)
+    search_fields = ('user__username', 'id')
     ordering = ('-sale_date',)
+
 
 @admin.register(SaleItem)
 class SaleItemAdmin(admin.ModelAdmin):
@@ -34,7 +35,7 @@ class SaleItemAdmin(admin.ModelAdmin):
 
     @admin.display(description="Total Price")
     def total_price_display(self, obj):
-        return obj.total_price()  # Ensure this method does not need extra arguments
+        return f"${obj.total_price:.2f}" if hasattr(obj, 'total_price') else "N/A"
 
 
 class InventoryStatementItemInline(admin.TabularInline):
@@ -42,6 +43,7 @@ class InventoryStatementItemInline(admin.TabularInline):
     extra = 0
     readonly_fields = ['opening_stock', 'invoiced_stock', 'closing_stock', 'variance', 'remarks']
     fields = ['product', 'opening_stock', 'received_stock', 'invoiced_stock', 'closing_stock', 'variance', 'remarks']
+
 
 @admin.register(InventoryStatement)
 class InventoryStatementAdmin(admin.ModelAdmin):

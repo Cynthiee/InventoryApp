@@ -26,12 +26,20 @@
             <p class="text-gray-900">&#8358; {{ product.bulk_price }}</p>
         </div>
         <div class="flex justify-between">
-            <p class="text-gray-700"><strong>Minimum Bulk Quantity:</strong></p>
-            <p class="text-gray-900">{{ product.minimum_bulk_quantity }}</p>
+            <p class="text-gray-700"><strong>Dozen Price:</strong></p>
+            <p class="text-gray-900">&#8358; {{ product.dozen_price }}</p>
         </div>
         <div class="flex justify-between">
             <p class="text-gray-700"><strong>Quantity:</strong></p>
             <p class="text-gray-900">{{ product.quantity }}</p>
+        </div>
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Quantity per Carton:</strong></p>
+            <p class="text-gray-900">{{ product.quantity_per_carton }}</p>
+        </div>
+        <div class="flex justify-between">
+            <p class="text-gray-700"><strong>Minimum Bulk Quantity:</strong></p>
+            <p class="text-gray-900">{{ product.minimum_bulk_quantity }}</p>
         </div>
         <div class="flex justify-between">
             <p class="text-gray-700"><strong>Restock Level:</strong></p>
@@ -44,10 +52,12 @@
         <div class="flex justify-between">
             <p class="text-gray-700"><strong>Status:</strong></p>
             <p class="text-gray-900">
-                {% if product.restock_level %}
+                {% if product.quantity > product.restock_level %}
                     <span class="text-green-600">In Stock</span>
-                {% else %}
+                {% elif product.quantity == 0 %}
                     <span class="text-red-600">Out of Stock</span>
+                {% else %}
+                    <span class="text-yellow-600">Low Stock</span>
                 {% endif %}
             </p>
         </div>
