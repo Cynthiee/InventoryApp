@@ -19,7 +19,7 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
-
+    
 
 class Product(models.Model):
     category = models.ForeignKey(Category, blank=False, related_name='products', on_delete=models.CASCADE)
@@ -57,8 +57,6 @@ class Product(models.Model):
         from django.core.exceptions import ValidationError
         if self.bulk_price > self.regular_price:
             raise ValidationError("Bulk price cannot be greater than regular price.")
-        if self.dozen_price <= self.regular_price:
-            raise ValidationError("Dozen price must be greater than regular price.")
         
     def save(self, *args, form_edit=False, **kwargs):
         # Ensure quantity is a plain integer before comparison

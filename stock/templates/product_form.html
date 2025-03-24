@@ -112,85 +112,79 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const quantityInput = document.querySelector('input[name="quantity"]');
-    const restockInput = document.querySelector('input[name="restock_level"]');
-    const warningDiv = document.getElementById('stock-warning');
-
-    const regularPriceInput = document.querySelector('input[name="regular_price"]');
-    const bulkPriceInput = document.querySelector('input[name="bulk_price"]');
-    const bulkPriceWarningDiv = document.getElementById('bulk-price-warning');
-
-    const dozenPriceInput = document.querySelector('input[name="dozen_price"]');
-    const dozenPriceWarningDiv = document.getElementById('dozen-price-warning');
-
-    const form = document.getElementById('productForm');
-
-    function checkStockLevel() {
-        const quantity = parseInt(quantityInput.value) || 0;
-        const restockLevel = parseInt(restockInput.value) || 0;
-
-        // Only show warning if both fields have values and quantity <= restockLevel
-        if (quantityInput.value && restockInput.value && quantity <= restockLevel) {
-            warningDiv.classList.remove('hidden');
-        } else {
-            warningDiv.classList.add('hidden');
+    document.addEventListener('DOMContentLoaded', function() {
+        const quantityInput = document.querySelector('input[name="quantity"]');
+        const restockInput = document.querySelector('input[name="restock_level"]');
+        const warningDiv = document.getElementById('stock-warning');
+    
+        const regularPriceInput = document.querySelector('input[name="regular_price"]');
+        const bulkPriceInput = document.querySelector('input[name="bulk_price"]');
+        const bulkPriceWarningDiv = document.getElementById('bulk-price-warning');
+    
+        const dozenPriceInput = document.querySelector('input[name="dozen_price"]');
+        const dozenPriceWarningDiv = document.getElementById('dozen-price-warning');
+    
+        const form = document.getElementById('productForm');
+    
+        function checkStockLevel() {
+            const quantity = parseInt(quantityInput.value) || 0;
+            const restockLevel = parseInt(restockInput.value) || 0;
+    
+            // Only show warning if both fields have values and quantity <= restockLevel
+            if (quantityInput.value && restockInput.value && quantity <= restockLevel) {
+                warningDiv.classList.remove('hidden');
+            } else {
+                warningDiv.classList.add('hidden');
+            }
         }
-    }
-
-    function checkBulkPrice() {
-        const regularPrice = parseFloat(regularPriceInput.value) || 0;
-        const bulkPrice = parseFloat(bulkPriceInput.value) || 0;
-
-        // Show warning if bulk price is higher than regular price
-        if (bulkPrice >= regularPrice) {
-            bulkPriceWarningDiv.classList.remove('hidden');
-            return false; // Invalid
-        } else {
-            bulkPriceWarningDiv.classList.add('hidden');
-            return true; // Valid
+    
+        function checkBulkPrice() {
+            const regularPrice = parseFloat(regularPriceInput.value) || 0;
+            const bulkPrice = parseFloat(bulkPriceInput.value) || 0;
+    
+            // Show warning if bulk price is higher than regular price
+            if (bulkPrice > regularPrice) {
+                bulkPriceWarningDiv.classList.remove('hidden');
+                return false; // Invalid
+            } else {
+                bulkPriceWarningDiv.classList.add('hidden');
+                return true; // Valid
+            }
         }
-    }
-
-    function checkDozenPrice() {
-        const regularPrice = parseFloat(regularPriceInput.value) || 0;
-        const dozenPrice = parseFloat(dozenPriceInput.value) || 0;
-
-        // Show warning if dozen price is lower than or equal to regular price
-        if (dozenPrice <= regularPrice) {
-            dozenPriceWarningDiv.classList.remove('hidden');
-            return false; // Invalid
-        } else {
+    
+        function checkDozenPrice() {
+            // Dozen price no longer needs to be higher than regular price
+            // Hide any existing warnings and always return valid
             dozenPriceWarningDiv.classList.add('hidden');
-            return true; // Valid
+            return true; // Always valid now
         }
-    }
-
-    quantityInput.addEventListener('input', checkStockLevel);
-    restockInput.addEventListener('input', checkStockLevel);
-
-    regularPriceInput.addEventListener('input', () => {
+    
+        quantityInput.addEventListener('input', checkStockLevel);
+        restockInput.addEventListener('input', checkStockLevel);
+    
+        regularPriceInput.addEventListener('input', () => {
+            checkBulkPrice();
+            // Still call checkDozenPrice to hide any warnings that might be showing
+            checkDozenPrice();
+        });
+        bulkPriceInput.addEventListener('input', checkBulkPrice);
+        dozenPriceInput.addEventListener('input', checkDozenPrice);
+    
+        // Initial checks on page load
+        checkStockLevel();
         checkBulkPrice();
         checkDozenPrice();
+    
+        // Form submission validation
+        form.addEventListener('submit', function(event) {
+            const isBulkPriceValid = checkBulkPrice();
+            // We no longer check dozen price validity as it's always valid
+            
+            if (!isBulkPriceValid) {
+                event.preventDefault(); // Prevent form submission
+                alert('Please correct the pricing errors before saving.');
+            }
+        });
     });
-    bulkPriceInput.addEventListener('input', checkBulkPrice);
-    dozenPriceInput.addEventListener('input', checkDozenPrice);
-
-    // Initial checks on page load
-    checkStockLevel();
-    checkBulkPrice();
-    checkDozenPrice();
-
-    // Form submission validation
-    form.addEventListener('submit', function(event) {
-        const isBulkPriceValid = checkBulkPrice();
-        const isDozenPriceValid = checkDozenPrice();
-
-        if (!isBulkPriceValid || !isDozenPriceValid) {
-            event.preventDefault(); // Prevent form submission
-            alert('Please correct the pricing errors before saving.');
-        }
-    });
-});
 </script>
 {% endblock content %}
