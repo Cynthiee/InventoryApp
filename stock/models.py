@@ -117,6 +117,9 @@ class SaleItem(models.Model):
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     sale_type = models.CharField(max_length=10, choices=SALE_TYPE_CHOICES, default='regular')
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)
+    # Add field to store the custom minimum bulk quantity if set
+    custom_bulk_minimum = models.PositiveIntegerField(null=True, blank=True, 
+                                                    help_text="Custom minimum bulk quantity for this sale item")
 
     def clean(self):
         """Validate the sale item before saving."""
@@ -130,9 +133,18 @@ class SaleItem(models.Model):
         if self.quantity is None:
             raise ValidationError("Quantity cannot be empty.")
         
+        # Determine the effective minimum bulk quantity
+        effective_min_bulk_qty = self.product.minimum_bulk_quantity
+        if self.custom_bulk_minimum is not None and self.custom_bulk_minimum > 0:
+            if self.custom_bulk_minimum < self.product.minimum_bulk_quantity:
+                raise ValidationError(
+                    f"Custom bulk minimum ({self.custom_bulk_minimum}) cannot be less than the product's default minimum ({self.product.minimum_bulk_quantity})."
+                )
+            effective_min_bulk_qty = self.custom_bulk_minimum
+        
         # Validate based on sale type
-        if self.sale_type == 'bulk' and self.quantity < self.product.minimum_bulk_quantity:
-            raise ValidationError(f"Minimum {self.product.minimum_bulk_quantity} items required for bulk purchase.")
+        if self.sale_type == 'bulk' and self.quantity < effective_min_bulk_qty:
+            raise ValidationError(f"Minimum {effective_min_bulk_qty} items required for bulk purchase.")
     
     @property
     def total_price(self):

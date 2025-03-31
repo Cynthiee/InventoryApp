@@ -248,7 +248,7 @@ def product_delete(request, slug):
 
 # Sale Views
 def sale_create(request):
-    """Create a new sale with multiple sale items - optimized version."""
+    """Create a new sale with multiple sale items - optimized version with custom bulk minimum support."""
     products = Product.objects.filter(quantity__gt=0)
     
     if request.method == 'POST':
@@ -277,6 +277,8 @@ def sale_create(request):
                         
                         product = form.cleaned_data.get('product')
                         quantity = form.cleaned_data.get('quantity', 0)
+                        sale_type = form.cleaned_data.get('sale_type', 'regular')
+                        custom_bulk_minimum = form.cleaned_data.get('custom_bulk_minimum')
                         
                         if not product or not quantity:
                             continue
@@ -288,11 +290,11 @@ def sale_create(request):
                             product_quantities[product.id] = quantity
                         
                         # Store complete item data for later creation
-                        sale_type = form.cleaned_data.get('sale_type', 'regular')
                         sale_items_data.append({
                             'product': product,
                             'quantity': quantity,
-                            'sale_type': sale_type
+                            'sale_type': sale_type,
+                            'custom_bulk_minimum': custom_bulk_minimum
                         })
                     
                     # Process products only if we have items
@@ -330,23 +332,46 @@ def sale_create(request):
                             product_instance = locked_products[product.id]
                             sale_type = item_data['sale_type']
                             quantity = item_data['quantity']
+                            custom_bulk_minimum = item_data.get('custom_bulk_minimum')
                             
                             # Set the price based on the sale type
                             if sale_type == 'bulk':
                                 price_per_unit = product.bulk_price
+                                
+                                # Additional validation for bulk purchases with the custom minimum
+                                effective_min_bulk_qty = product.minimum_bulk_quantity
+                                if custom_bulk_minimum is not None and custom_bulk_minimum > 0:
+                                    if custom_bulk_minimum < product.minimum_bulk_quantity:
+                                        raise ValidationError(
+                                            f"Custom bulk minimum ({custom_bulk_minimum}) for {product.name} cannot be less than the product's default minimum ({product.minimum_bulk_quantity})."
+                                        )
+                                    effective_min_bulk_qty = custom_bulk_minimum
+                                
+                                if quantity < effective_min_bulk_qty:
+                                    raise ValidationError(
+                                        f"Minimum {effective_min_bulk_qty} items required for bulk purchase of {product.name}."
+                                    )
+                                    
                             elif sale_type == 'dozen':
                                 price_per_unit = product.dozen_price
                             else:
                                 price_per_unit = product.regular_price
                             
                             # Create the sale item object (don't save yet)
-                            sale_items.append(SaleItem(
+                            sale_item = SaleItem(
                                 sale=sale,
                                 product=product,
                                 quantity=quantity,
                                 sale_type=sale_type,
                                 price_per_unit=price_per_unit
-                            ))
+                            )
+                            
+                            # If you want to store the custom bulk minimum in the database
+                            # Assuming you've added a custom_bulk_minimum field to the SaleItem model
+                            if custom_bulk_minimum is not None and custom_bulk_minimum > 0 and sale_type == 'bulk':
+                                sale_item.custom_bulk_minimum = custom_bulk_minimum
+                                
+                            sale_items.append(sale_item)
                             
                             # Update product quantity directly
                             product_instance.quantity -= quantity
@@ -403,7 +428,6 @@ def sale_create(request):
     }
     
     return render(request, 'sale_form.html', context)
-
 
 def sale_list(request):
     query = request.GET.get('q', '')
