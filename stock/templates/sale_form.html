@@ -211,7 +211,7 @@
                         quantityInput.setAttribute('min', product.minimum_bulk_quantity);
                         break;
                     case "dozen":
-                        minQuantityInfo.textContent = "Min: 12 for dozen";
+                        minQuantityInfo.textContent = "Min: 1 for dozen";
                         quantityInput.setAttribute('min', 12);
                         break;
                     default:
@@ -234,7 +234,7 @@
                 const quantity = parseInt(quantityInput.value) || 0;
                 if (this.value === "bulk" && quantity < product.minimum_bulk_quantity) {
                     quantityInput.value = product.minimum_bulk_quantity;
-                } else if (this.value === "dozen" && quantity < 12) {
+                } else if (this.value === "dozen" && quantity < 1) {
                     quantityInput.value = 12;
                 }
                 
@@ -312,8 +312,8 @@
                             break;
                         case "dozen":
                             pricePerUnit = product.dozen_price;
-                            quantityInput.setAttribute('min', 12);
-                            minQuantityInfo.textContent = "Min: 12 for dozen";
+                            quantityInput.setAttribute('min', 1);
+                            minQuantityInfo.textContent = "Min: 1 for dozen";
                             customMinBulkInput.value = "";
                             break;
                         default:
@@ -328,8 +328,8 @@
                     // Apply business rules based on sale type
                     if (saleType === "bulk" && quantity < product.minimum_bulk_quantity) {
                         quantityInput.value = product.minimum_bulk_quantity;
-                    } else if (saleType === "dozen" && quantity < 12) {
-                        quantityInput.value = 12;
+                    } else if (saleType === "dozen" && quantity < 1) {
+                        quantityInput.value = 1;
                     }
                     
                     if (quantity > product.quantity) {
@@ -505,7 +505,7 @@
                             alert(`Quantity for ${product.name} must be at least ${product.minimum_bulk_quantity} for bulk sales.`);
                             quantityInput.focus();
                             isValid = false;
-                        } else if (saleType === "dozen" && quantity < 12) {
+                        } else if (saleType === "dozen" && quantity < 1) {
                             alert(`Quantity for ${product.name} must be at least 12 for dozen sales.`);
                             quantityInput.focus();
                             isValid = false;
