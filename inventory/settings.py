@@ -36,12 +36,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'stock',
     'tailwind',
     'theme',
     'django_browser_reload',
     "crispy_forms",
     "crispy_tailwind",
+    'sales',
+    'products',
+    'statement',
 ]
 
 MIDDLEWARE = [
@@ -61,7 +63,7 @@ ROOT_URLCONF = 'inventory.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [os.path.join(BASE_DIR / 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -89,7 +91,7 @@ DATABASES = {
         }
     }
 
-DATABASES['default'] = dj_database_url.parse(config("DATABASE_URL"))
+# DATABASES['default'] = dj_database_url.parse(config("DATABASE_URL"))
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
