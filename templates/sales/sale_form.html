@@ -204,19 +204,15 @@
             // Function to update minimum quantity info based on sale type
             function updateMinimumQuantityInfo(saleType, product) {
                 if (!product) return;
-                
                 switch (saleType) {
                     case "bulk":
                         minQuantityInfo.textContent = `Min: ${product.minimum_bulk_quantity} for bulk`;
-                        quantityInput.setAttribute('min', product.minimum_bulk_quantity);
                         break;
                     case "dozen":
-                        minQuantityInfo.textContent = "Min: 1 for dozen";
-                        quantityInput.setAttribute('min', 12);
+                        minQuantityInfo.textContent = "";
                         break;
                     default:
                         minQuantityInfo.textContent = "";
-                        quantityInput.setAttribute('min', 1);
                 }
             }
             
@@ -224,27 +220,15 @@
             saleTypeSelect.addEventListener("change", function() {
                 const productId = hiddenInput.value;
                 if (!productId) return;
-                
                 const product = productData[productId];
                 if (!product) return;
-                
                 updateMinimumQuantityInfo(this.value, product);
-                
-                // Apply minimum quantity if needed
-                const quantity = parseInt(quantityInput.value) || 0;
-                if (this.value === "bulk" && quantity < product.minimum_bulk_quantity) {
-                    quantityInput.value = product.minimum_bulk_quantity;
-                } else if (this.value === "dozen" && quantity < 1) {
-                    quantityInput.value = 12;
-                }
-                
-                // Update custom bulk minimum if in bulk mode
+
                 if (this.value === "bulk") {
                     customMinBulkInput.value = product.minimum_bulk_quantity;
                 } else {
                     customMinBulkInput.value = "";
                 }
-                
                 // Trigger quantity change to update calculations
                 const event = new Event("input");
                 quantityInput.dispatchEvent(event);
@@ -281,64 +265,39 @@
                         minQuantityInfo.textContent = "";
                         return;
                     }
-                    
                     const productId = productInput.value;
                     const product = productData[productId];
-                    
                     if (!product) {
                         priceCell.textContent = "0.00";
                         totalCell.textContent = "0.00";
                         minQuantityInfo.textContent = "";
                         return;
                     }
-                    
-                    // Update the selected product display with quantity per carton
                     const cartonInfo = product.quantity_per_carton > 0 ? 
                         ` (${product.quantity_per_carton} units per carton)` : '';
                     selectedProductName.textContent = `${product.name} (Available: ${product.quantity})${cartonInfo}`;
-                    
+
                     const saleType = saleTypeSelect.value;
                     let pricePerUnit;
-                    
-                    // Set price and minimum quantity based on sale type
                     switch (saleType) {
                         case "bulk":
                             pricePerUnit = product.bulk_price;
-                            quantityInput.setAttribute('min', product.minimum_bulk_quantity);
                             minQuantityInfo.textContent = `Min: ${product.minimum_bulk_quantity} for bulk`;
-                            
-                            // Always update the hidden custom_bulk_minimum field with the correct value
                             customMinBulkInput.value = product.minimum_bulk_quantity;
                             break;
                         case "dozen":
                             pricePerUnit = product.dozen_price;
-                            quantityInput.setAttribute('min', 1);
                             minQuantityInfo.textContent = "Min: 1 for dozen";
                             customMinBulkInput.value = "";
                             break;
                         default:
                             pricePerUnit = product.regular_price;
-                            quantityInput.setAttribute('min', 1);
                             minQuantityInfo.textContent = "";
                             customMinBulkInput.value = "";
                     }
-                    
                     const quantity = parseInt(quantityInput.value) || 0;
-                    
-                    // Apply business rules based on sale type
-                    if (saleType === "bulk" && quantity < product.minimum_bulk_quantity) {
-                        quantityInput.value = product.minimum_bulk_quantity;
-                    } else if (saleType === "dozen" && quantity < 1) {
-                        quantityInput.value = 1;
-                    }
-                    
-                    if (quantity > product.quantity) {
-                        alert(`Only ${product.quantity} units of ${product.name} are available.`);
-                        quantityInput.value = product.quantity;
-                    }
-                    
-                    const total = pricePerUnit * parseInt(quantityInput.value);
-                    
+
+                    const total = pricePerUnit * quantity;
                     priceCell.textContent = pricePerUnit.toFixed(2);
                     totalCell.textContent = total.toFixed(2);
                     updateFinalTotal();
@@ -467,61 +426,41 @@
         // Initialize price calculations
         updatePrices();
         
-        // Form submission handling
-        document.getElementById("saleForm").addEventListener("submit", function(e) {
-            // Check if at least one product is selected
-            const productInputs = document.querySelectorAll("input[name$='-product']");
-            let hasProducts = false;
-            
-            for (const input of productInputs) {
-                if (input.value) {
-                    hasProducts = true;
-                    break;
-                }
-            }
-            
-            if (!hasProducts) {
-                e.preventDefault();
-                alert("Please select at least one product.");
-                return;
-            }
-            
-            // Validate quantities for different sale types
-            let isValid = true;
-            document.querySelectorAll(".sale-item").forEach((row) => {
-                const productInput = row.querySelector(`input[name$='-product']`);
-                const saleTypeSelect = row.querySelector(`select[name$='-sale_type']`);
-                const quantityInput = row.querySelector(`input[name$='-quantity']`);
-                
-                if (productInput.value) {
-                    const productId = productInput.value;
-                    const product = productData[productId];
-                    
-                    if (product) {
-                        const quantity = parseInt(quantityInput.value) || 0;
-                        const saleType = saleTypeSelect.value;
-                        
-                        if (saleType === "bulk" && quantity < product.minimum_bulk_quantity) {
-                            alert(`Quantity for ${product.name} must be at least ${product.minimum_bulk_quantity} for bulk sales.`);
-                            quantityInput.focus();
-                            isValid = false;
-                        } else if (saleType === "dozen" && quantity < 1) {
-                            alert(`Quantity for ${product.name} must be at least 12 for dozen sales.`);
-                            quantityInput.focus();
-                            isValid = false;
-                        } else if (quantity <= 0) {
-                            alert(`Quantity for ${product.name} must be greater than zero.`);
-                            quantityInput.focus();
-                            isValid = false;
-                        }
-                    }
-                }
-            });
-            
-            if (!isValid) {
-                e.preventDefault();
-            }
-        });
+       // Form submission handling
+document.getElementById("saleForm").addEventListener("submit", function(e) {
+    // Check if at least one product is selected
+    const productInputs = document.querySelectorAll("input[name$='-product']");
+    let hasProducts = false;
+    
+    for (const input of productInputs) {
+        if (input.value) {
+            hasProducts = true;
+            break;
+        }
+    }
+    
+    if (!hasProducts) {
+        e.preventDefault();
+        alert("Please select at least one product.");
+        return;
+    }
+    
+    // Validate quantities are positive
+    let isValid = true;
+    document.querySelectorAll(".sale-item").forEach((row) => {
+        const quantityInput = row.querySelector(`input[name$='-quantity']`);
+        
+        if ((parseInt(quantityInput.value) || 0) <= 0) {
+            alert(`Quantity must be greater than zero.`);
+            quantityInput.focus();
+            isValid = false;
+        }
+    });
+    
+    if (!isValid) {
+        e.preventDefault();
+    }
+});
     
         // Display Django Messages as a Popup Alert
         {% if messages %}

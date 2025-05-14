@@ -52,18 +52,12 @@ class SaleItemForm(forms.ModelForm):
         if not all([product, quantity, sale_type]):
             return cleaned_data
 
-        effective_min_bulk_qty = product.minimum_bulk_quantity
+        # Only validate that custom minimum isn't less than product default
         if custom_bulk_minimum is not None and custom_bulk_minimum > 0:
             if custom_bulk_minimum < product.minimum_bulk_quantity:
                 raise forms.ValidationError(
                     f"Custom bulk minimum ({custom_bulk_minimum}) cannot be less than the product's default minimum ({product.minimum_bulk_quantity})."
                 )
-            effective_min_bulk_qty = custom_bulk_minimum
-
-        if sale_type == 'bulk' and quantity < effective_min_bulk_qty:
-            raise forms.ValidationError(
-                f"Minimum {effective_min_bulk_qty} items required for bulk purchase."
-            )
 
         return cleaned_data
 

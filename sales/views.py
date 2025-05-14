@@ -105,18 +105,12 @@ def sale_create(request):
                                 price_per_unit = product.bulk_price
                                 
                                 # Additional validation for bulk purchases with the custom minimum
-                                effective_min_bulk_qty = product.minimum_bulk_quantity
+                                
                                 if custom_bulk_minimum is not None and custom_bulk_minimum > 0:
                                     if custom_bulk_minimum < product.minimum_bulk_quantity:
                                         raise ValidationError(
                                             f"Custom bulk minimum ({custom_bulk_minimum}) for {product.name} cannot be less than the product's default minimum ({product.minimum_bulk_quantity})."
                                         )
-                                    effective_min_bulk_qty = custom_bulk_minimum
-                                
-                                if quantity < effective_min_bulk_qty:
-                                    raise ValidationError(
-                                        f"Minimum {effective_min_bulk_qty} items required for bulk purchase of {product.name}."
-                                    )
                                     
                             elif sale_type == 'dozen':
                                 price_per_unit = product.dozen_price

@@ -40,14 +40,12 @@ class SaleItem(models.Model):
             return
         if self.quantity is None:
             raise ValidationError("Quantity cannot be empty.")
-        effective_min_bulk_qty = self.product.minimum_bulk_quantity
+        # Only validate that custom minimum isn't less than product default
         if self.custom_bulk_minimum and self.custom_bulk_minimum < self.product.minimum_bulk_quantity:
             raise ValidationError(
                 f"Custom bulk minimum ({self.custom_bulk_minimum}) cannot be less than default minimum ({self.product.minimum_bulk_quantity})."
             )
-        if self.sale_type == 'bulk' and self.quantity < (self.custom_bulk_minimum or effective_min_bulk_qty):
-            raise ValidationError(f"Minimum {effective_min_bulk_qty} items required for bulk purchase.")
-
+        
     @property
     def total_price(self):
         return self.quantity * self.price_per_unit
