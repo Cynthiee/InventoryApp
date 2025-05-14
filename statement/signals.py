@@ -1,8 +1,9 @@
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.timezone import now
-from .models import ProductStockUpdate,  InventoryStatement
-from sales.models import Sale, SaleItem, Product
+from .models import ProductStockUpdate, InventoryStatement, InventoryStatementItem
+from products.models import Product
+from sales.models import Sale, SaleItem
 from django.db.models import Sum
 import logging
 
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Create a flag to prevent signal recursion
 inventory_update_in_progress = False
+product_update_in_progress = False
 
 @receiver(post_save, sender=Sale)
 def update_inventory_statement(sender, instance, created, **kwargs):
@@ -43,19 +45,46 @@ def update_inventory_statement(sender, instance, created, **kwargs):
             inventory_update_in_progress = False
 
 
-@receiver(pre_save, sender=Product)
-def track_quantity_change(sender, instance, **kwargs):
-    if instance.pk:
-        try:
-            old_instance = Product.objects.get(pk=instance.pk)
-            quantity_change = instance.quantity - old_instance.quantity
-            if quantity_change != 0:
-                ProductStockUpdate.objects.create(
-                    product=instance,
-                    quantity_change=quantity_change,
-                    notes=f"Quantity updated from {old_instance.quantity} to {instance.quantity}"
-                )
-        except Product.DoesNotExist:
-            logger.error(f"Product with ID {instance.pk} does not exist.")
-        except Exception as e:
-            logger.error(f"Error tracking quantity change for product {instance.name}: {str(e)}")
+@receiver(post_save, sender=Product)
+def update_product_in_statements(sender, instance, **kwargs):
+    """Update inventory statement items when a product is updated"""
+    global product_update_in_progress
+    
+    # Prevent signal recursion
+    if product_update_in_progress:
+        return
+    
+    try:
+        product_update_in_progress = True
+        
+        # Find all inventory statement items related to this product
+        statement_items = InventoryStatementItem.objects.filter(product=instance)
+        
+        for item in statement_items:
+            # Update closing stock
+            item.closing_stock = instance.quantity
+            
+            # Recalculate opening stock based on the relationship:
+            # opening_stock = closing_stock + invoiced_stock - received_stock
+            item.opening_stock = item.closing_stock + item.invoiced_stock - item.received_stock
+            
+            # Update remarks based on product's needs_restock flag
+            if item.variance != 0:
+                item.remarks = "Variance detected"
+            elif instance.needs_restock or instance.quantity <= instance.restock_level:
+                item.remarks = "Restock needed"
+            else:
+                item.remarks = "Normal"
+                
+            # Save the item without triggering other signals
+            item.save()
+            
+            # Update the parent statement totals
+            statement = item.inventory_statement
+            statement.total_products_in_stock = Product.objects.aggregate(total=Sum('quantity'))['total'] or 0
+            statement.save(update_fields=['total_products_in_stock'])
+            
+    except Exception as e:
+        logger.error(f"Error updating inventory statement items for product {instance.name}: {str(e)}")
+    finally:
+        product_update_in_progress = False

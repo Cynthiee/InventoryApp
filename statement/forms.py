@@ -14,17 +14,8 @@ class InventoryStatementForm(forms.ModelForm):
 class InventoryStatementItemForm(forms.ModelForm):
     class Meta:
         model = InventoryStatementItem
-        fields = ['received_stock']
-        widgets = {
-            'received_stock': forms.NumberInput(attrs={'class': 'form-control', 'min': '0'})
-        }
-
-    def clean_received_stock(self):
-        received_stock = self.cleaned_data.get('received_stock')
-        if received_stock < 0:
-            raise forms.ValidationError("Received stock cannot be negative")
-        return received_stock
-
+        fields = []
+       
 
 InventoryStatementItemFormSet = inlineformset_factory(
     InventoryStatement,

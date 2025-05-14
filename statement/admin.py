@@ -1,8 +1,15 @@
 from django.contrib import admin
 
-from statement.models import InventoryStatement, InventoryStatementItem
+from statement.models import InventoryStatement, InventoryStatementItem, ProductStockUpdate
 
 
+@admin.register(ProductStockUpdate)
+class ProductStockUpdateAdmin(admin.ModelAdmin):
+    list_display = ('product', 'quantity_change', 'date', 'notes')
+    list_filter = ('date', 'product')
+    search_fields = ('product__name', 'notes')
+    date_hierarchy = 'date'
+    
 class InventoryStatementItemInline(admin.TabularInline):
     model = InventoryStatementItem
     extra = 0

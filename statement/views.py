@@ -8,7 +8,6 @@ import csv
 from .models import InventoryStatement
 from .forms import InventoryStatementForm, InventoryStatementItemFormSet
 
-
 # Inventory Statement Views
 def inventory_statement_list(request):
     """View to list all inventory statements"""
@@ -17,7 +16,6 @@ def inventory_statement_list(request):
         'statements': statements,
         'title': 'Inventory Statements'
     })
-
 
 def create_inventory_statement(request):
     """View to create a new inventory statement."""
@@ -55,51 +53,40 @@ def create_inventory_statement(request):
         'title': 'Create Inventory Statement'
     })
 
-
 def inventory_statement_detail(request, statement_id):
     """View to display a detailed inventory statement."""
     statement = get_object_or_404(InventoryStatement, id=statement_id)
     
-    # Check if items need to be generated
+    # Keep your refresh logic
+    if 'refresh' in request.GET:
+        refreshed_count = statement.refresh_items()
+        messages.success(request, f'Refreshed {refreshed_count} inventory items with current product data.')
+        return redirect('inventory_statement_detail', statement_id=statement.id)
+    
+    # Generate statement items if needed
     if not statement.items.exists():
         statement.generate_statement_items()
     
-    # Get all items first (used for the form)
-    all_items = statement.items.all()
+    # Get all items
+    items = statement.items.all()
     
-    # Get filter type from query parameters
+    # Handle filtering
     filter_type = request.GET.get('filter')
     
-    # Create a filtered queryset for display
     if filter_type == 'sold':
-        display_items = all_items.filter(invoiced_stock__gt=0)  # Products sold
+        display_items = items.filter(invoiced_stock__gt=0)
     elif filter_type == 'no_sales':
-        display_items = all_items.filter(invoiced_stock=0)  # Products with no sales
+        display_items = items.filter(invoiced_stock=0)
     elif filter_type == 'restock':
-        display_items = all_items.filter(remarks='Restock needed')  # Products needing restock
+        display_items = items.filter(remarks='Restock needed')
     elif filter_type == 'low_stock':
-        display_items = all_items.filter(closing_stock__lte=10)  # Products with low stock
+        display_items = items.filter(closing_stock__lte=10)
     else:
-        # If no valid filter is provided, show all items
-        display_items = all_items
-        filter_type = None  # Reset filter_type to None for template display
+        display_items = items
+        filter_type = None
     
-    # Handle form submission for updating received stock
-    if request.method == 'POST':
-        formset = InventoryStatementItemFormSet(request.POST, instance=statement)
-        if formset.is_valid():
-            formset.save()
-            messages.success(request, 'Inventory statement updated successfully.')
-            
-            # Preserve filter parameter in redirect
-            redirect_url = reverse('inventory_statement_detail', kwargs={'statement_id': statement.id})
-            if filter_type:
-                redirect_url += f'?filter={filter_type}'
-            return redirect(redirect_url)
-    else:
-        formset = InventoryStatementItemFormSet(instance=statement)
     
-    # Calculate totals for the filtered inventory items
+    # Calculate totals
     item_totals = display_items.aggregate(
         total_opening=Sum('opening_stock'),
         total_received=Sum('received_stock'),
@@ -108,33 +95,21 @@ def inventory_statement_detail(request, statement_id):
         total_variance=Sum('variance')
     )
     
-    # Add statement summary totals
+
     summary_totals = {
         'total_income': statement.total_income,
         'total_products_sold': statement.total_products_sold,
         'total_products_in_stock': statement.total_products_in_stock
     }
     
-    # Create a list of form/item pairs for the template to iterate over
-    form_item_pairs = []
-    
-    # Match formset forms with display items
-    item_ids = [item.id for item in display_items]
-    for form in formset:
-        # Only include forms for items that should be displayed
-        if form.instance.id in item_ids:
-            form_item_pairs.append((form, form.instance))
-    
     return render(request, 'statement/inventory_statement_detail.html', {
         'statement': statement,
-        'form_item_pairs': form_item_pairs,  # This is what the template should iterate over
-        'formset': formset,  # Still need this for the management form
+        'items': display_items,  # Just pass items directly
         'item_totals': item_totals,
         'summary_totals': summary_totals,
         'title': f'Inventory Statement: {statement.date}',
         'active_filter': filter_type
     })
-
 
 def regenerate_inventory_statement(request, statement_id):
     """Regenerate inventory statement items"""
@@ -150,7 +125,6 @@ def regenerate_inventory_statement(request, statement_id):
         'statement': statement,
         'title': 'Regenerate Inventory Statement'
     })
-
 
 def export_inventory_statement_csv(request, statement_id):
     """Export inventory statement as CSV"""
@@ -177,7 +151,6 @@ def export_inventory_statement_csv(request, statement_id):
         ])
     
     return response
-
 
 def export_inventory_statement_pdf(request, statement_id):
     """Export inventory statement as PDF"""

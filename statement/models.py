@@ -13,6 +13,12 @@ class ProductStockUpdate(models.Model):
     def __str__(self):
         return f"{self.product.name} - {self.quantity_change} on {self.date}"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Update product quantity after saving stock update
+        if self.quantity_change != 0:
+            self.product.update_quantity(self.quantity_change)
+
 class InventoryStatement(models.Model):
     date = models.DateField(unique=True)
     company_name = models.CharField(max_length=200, blank=True, null=True)
@@ -41,15 +47,18 @@ class InventoryStatement(models.Model):
             today_start = datetime.combine(today, time.min)
             today_end = datetime.combine(today, time.max)
 
+            # Get invoiced stock (sold items)
+            from sales.models import SaleItem
             invoiced_stock = SaleItem.objects.filter(
                 sale__sale_date__gte=today_start,
                 sale__sale_date__lte=today_end,
                 product=product
             ).aggregate(total_sold=Sum('quantity'))['total_sold'] or 0
 
+      
             received_stock = ProductStockUpdate.objects.filter(
                 product=product,
-                date=today,
+                date__range=(today_start.date(), today_end.date()),  # safer than exact match
                 quantity_change__gt=0
             ).aggregate(total_received=Sum('quantity_change'))['total_received'] or 0
 
@@ -58,7 +67,7 @@ class InventoryStatement(models.Model):
 
             if variance != 0:
                 remarks = "Variance detected"
-            elif closing_stock <= product.restock_level:
+            elif product.needs_restock or closing_stock <= product.restock_level:
                 remarks = "Restock needed"
             else:
                 remarks = "Normal"
@@ -73,7 +82,39 @@ class InventoryStatement(models.Model):
                 variance=variance,
                 remarks=remarks
             )
+
         return self.items.count()
+
+
+    def refresh_items(self):
+        """Refresh all inventory statement items based on current product data"""
+        items = self.items.select_related('product').all()
+        
+        for item in items:
+            product = item.product
+            
+            # Update closing stock to match current product quantity
+            item.closing_stock = product.quantity
+            
+            # Keep the relationship: opening_stock + received_stock - invoiced_stock = closing_stock
+            # So recalculate opening stock based on this
+            item.opening_stock = item.closing_stock + item.invoiced_stock - item.received_stock
+            
+            # Update remarks based on product state
+            if item.variance != 0:
+                item.remarks = "Variance detected"
+            elif product.needs_restock or product.quantity <= product.restock_level:
+                item.remarks = "Restock needed"
+            else:
+                item.remarks = "Normal"
+                
+            item.save()
+            
+        # Update statement totals
+        self.total_products_in_stock = Product.objects.aggregate(total=Sum('quantity'))['total'] or 0
+        self.save(update_fields=['total_products_in_stock'])
+        
+        return items.count()
 
 class InventoryStatementItem(models.Model):
     inventory_statement = models.ForeignKey(InventoryStatement, related_name='items', on_delete=models.CASCADE)
@@ -93,11 +134,29 @@ class InventoryStatementItem(models.Model):
     def __str__(self):
         return f"{self.product.name} - {self.inventory_statement.date}"
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, update_product=False, **kwargs):
+        """
+        Save the inventory statement item. If update_product is True,
+        also update the related product's quantity.
+        """
         if self.pk:
             orig = InventoryStatementItem.objects.get(pk=self.pk)
             if orig.received_stock != self.received_stock:
                 self.closing_stock = self.opening_stock + self.received_stock - self.invoiced_stock
+                
+                # Update product quantity if requested
+                if update_product and self.product.quantity != self.closing_stock:
+                    quantity_change = self.closing_stock - self.product.quantity
+                    self.product.update_quantity(quantity_change)
+                
+                # Update remarks based on product state
+                if self.variance != 0:
+                    self.remarks = "Variance detected"
+                elif self.product.needs_restock or self.closing_stock <= self.product.restock_level:
+                    self.remarks = "Restock needed"
+                else:
+                    self.remarks = "Normal"
         else:
             self.closing_stock = self.opening_stock + self.received_stock - self.invoiced_stock
+            
         super().save(*args, **kwargs)

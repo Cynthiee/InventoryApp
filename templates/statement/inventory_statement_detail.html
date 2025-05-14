@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
@@ -23,6 +22,10 @@
                 </div>
                 {% endif %}
                 <div class="btn-group">
+                    <!-- New Refresh button -->
+                    <a href="?refresh=1" class="btn btn-info">
+                        <i class="fas fa-sync"></i> Refresh from Products
+                    </a>
                     <a href="{% url 'export_inventory_statement_csv' statement_id=statement.id %}" class="btn btn-success">
                         <i class="fas fa-file-csv"></i> Export CSV
                     </a>
@@ -98,36 +101,32 @@
                                 <th scope="col">Closing Stock</th>
                                 <th scope="col">Variance</th>
                                 <th scope="col">Remarks</th>
+                                <th scope="col">Restock Level</th> <!-- New column -->
                             </tr>
                         </thead>
-                        <tbody>
-                            {% for form, item in form_item_pairs %}
-                            <tr {% if item.remarks == 'Restock needed' %}class="table-warning"{% elif item.remarks == 'Variance detected' %}class="table-danger"{% endif %}>
-                                <td class="text-dark">{{ item.product.id }}</td>
-                                <td class="text-dark">{{ item.product.name }}</td>
-                                <td class="text-dark">{{ item.opening_stock }}</td>
-                                <td>
-                                    {{ form.id }}
-                                    {{ form.received_stock }}
-                                    {% if form.received_stock.errors %}
-                                    <div class="text-danger">{{ form.received_stock.errors }}</div>
-                                    {% endif %}
-                                </td>
-                                <td class="text-dark">{{ item.invoiced_stock }}</td>
-                                <td class="text-dark">{{ item.closing_stock }}</td>
-                                <td class="text-dark">{{ item.variance }}</td>
-                                <td>
-                                    <span class="{% if item.remarks == 'Restock needed' %}text-warning{% elif item.remarks == 'Variance detected' %}text-danger{% else %}text-success{% endif %}">
-                                        {{ item.remarks }}
-                                    </span>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="8" class="text-center text-dark">No inventory items found for the selected filter</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
+<tbody>
+    {% for item in items %}
+    <tr {% if item.remarks == 'Restock needed' %}class="table-warning"{% elif item.remarks == 'Variance detected' %}class="table-danger"{% endif %}>
+        <td class="text-dark">{{ item.product.id }}</td>
+        <td class="text-dark">{{ item.product.name }}</td>
+        <td class="text-dark">{{ item.opening_stock }}</td>
+        <td class="text-dark">{{ item.received_stock }}</td>
+        <td class="text-dark">{{ item.invoiced_stock }}</td>
+        <td class="text-dark">{{ item.closing_stock }}</td>
+        <td class="text-dark">{{ item.variance }}</td>
+        <td>
+            <span class="{% if item.remarks == 'Restock needed' %}text-warning{% elif item.remarks == 'Variance detected' %}text-danger{% else %}text-success{% endif %}">
+                {{ item.remarks }}
+            </span>
+        </td>
+        <td class="text-dark">{{ item.product.restock_level }}</td>
+    </tr>
+    {% empty %}
+    <tr>
+        <td colspan="9" class="text-center text-dark">No inventory items found for the selected filter</td>
+    </tr>
+    {% endfor %}
+</tbody>
                         <tfoot class="table-secondary">
                             <tr>
                                 <th colspan="2" class="text-dark">Totals</th>
@@ -136,18 +135,18 @@
                                 <th class="text-dark">{{ item_totals.total_invoiced|default:0 }}</th>
                                 <th class="text-dark">{{ item_totals.total_closing|default:0 }}</th>
                                 <th class="text-dark">{{ item_totals.total_variance|default:0 }}</th>
-                                <th></th>
+                                <th colspan="2"></th>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
                 
-                <div class="mt-3">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Update Received Stock
-                    </button>
-                    <small class="text-muted ms-2">Update the "Received Stock" values and click to save changes</small>
-                </div>
+              <div class="mt-3">
+                <a href="{% url 'product_list' %}" class="btn btn-primary">
+                    <i class="fas fa-boxes"></i> Manage Products
+                </a>
+                <small class="text-muted ms-2">To update stock levels, edit products directly</small>
+            </div>
             </form>
         </div>
     </div>
